@@ -221,6 +221,8 @@ export default function App() {
   const [shareRecord, setShareRecord] = useState<DrinkRecord | null>(null);
   const singleReceiptRef = useRef<HTMLDivElement>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showPosterModal, setShowPosterModal] = useState(false);
+  const posterRef = useRef<HTMLDivElement>(null);
   const [showAboutUsModal, setShowAboutUsModal] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [draftImage, setDraftImage] = useState<string>('??');
@@ -1327,6 +1329,16 @@ const handleSaveDrink = () => {
                 {prefLanguage === 'English' ? 'Y' : '年'}
               </button>
               <div className="flex-1"></div>
+              
+              {/* 👇 新增：生成炫酷海报的按钮 */}
+              {statCups > 0 && (
+                <button 
+                  onClick={() => setShowPosterModal(true)}
+                  className="px-3 h-9 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shadow-md hover:opacity-90 active:scale-95 transition-all"
+                >
+                  {prefLanguage === 'English' ? '✨ Wrapped' : '✨ 回忆'}
+                </button>
+              )}
               <button 
                 onClick={() => {
                   setShowReceiptModal(true);
@@ -2102,6 +2114,133 @@ const handleSaveDrink = () => {
             </motion.div>
             
             <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShareRecord(null)} className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors">
+                <X size={22} strokeWidth={2.5} />
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* 🌟 Spotify 风格月度/年度总结海报 */}
+      <AnimatePresence>
+        {showPosterModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-4 backdrop-blur-xl"
+          >
+            {/* 核心海报内容区 (这个 div 就是最终截图的区域) */}
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              ref={posterRef}
+              className="w-full max-w-[360px] rounded-3xl relative flex flex-col p-8 text-white shadow-[0_20px_80px_rgba(0,0,0,0.5)] overflow-hidden"
+              style={{
+                // 极具质感的暗黑渐变背景
+                background: 'linear-gradient(135deg, #111827 0%, #312e81 50%, #4c1d95 100%)'
+              }}
+            >
+              {/* 背景装饰光斑 */}
+              <div className="absolute -top-20 -right-20 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+              {/* 顶部标识 */}
+              <div className="flex justify-between items-center mb-8 relative z-10">
+                <div className="text-xs font-bold tracking-[0.3em] uppercase text-white/60">
+                  Sugar Ultra
+                </div>
+                <div className="px-3 py-1 bg-white/10 rounded-full backdrop-blur-md text-xs font-bold border border-white/10">
+                  {statDateLabel}
+                </div>
+              </div>
+
+              {/* 标题与大数字 */}
+              <div className="relative z-10 mb-8">
+                <h1 className="text-[28px] font-black tracking-tight leading-tight mb-2">
+                  {prefLanguage === 'English' ? 'Your Boba Wrapped' : '你的饮茶回忆录'}
+                </h1>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[72px] font-black leading-none text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300">
+                    {statCups}
+                  </span>
+                  <span className="text-xl font-bold text-white/80">{prefLanguage === 'English' ? 'Cups' : '杯'}</span>
+                </div>
+              </div>
+
+              {/* 👉 核心：动态文案生成引擎 */}
+              <div className="space-y-5 relative z-10 flex-1">
+                {(() => {
+                  let intro = prefLanguage === 'English' 
+                    ? `You've consumed ${statCups} cups during this period.` 
+                    : `在这个周期里，你共消耗了 ${statCups} 杯快乐水。`;
+                  if (statCups > 20) {
+                    intro = prefLanguage === 'English' 
+                      ? `Swimming in boba! You enjoyed a massive ${statCups} cups.` 
+                      : `你简直是泡在奶茶里！共消耗了惊人的 ${statCups} 杯生命之水。`;
+                  } else if (statCups <= 5 && statCups > 0) {
+                    intro = prefLanguage === 'English' 
+                      ? `Amazing self-control! Only ${statCups} cups consumed.` 
+                      : `你展现了惊人的克制力，仅用 ${statCups} 杯就安稳度过。`;
+                  }
+
+                  let brandStr = "";
+                  if (receiptTopBrand !== '无' && receiptTopBrand !== 'None' && statCups > 0) {
+                     brandStr = prefLanguage === 'English'
+                       ? `Your most loyal companion was 「${receiptTopBrand}」.`
+                       : `你最长情的陪伴是「${receiptTopBrand}」，它是你最稳定的多巴胺来源。`;
+                  } else if (statCups > 0) {
+                     brandStr = prefLanguage === 'English'
+                       ? `You love exploring all kinds of brands.`
+                       : `你是个博爱的人，雨露均沾，没有偏爱任何一家。`;
+                  }
+
+                  let specStr = "";
+                  if (statCups > 0) {
+                     specStr = prefLanguage === 'English'
+                       ? `You're a firm believer in 「${receiptTopTemp} + ${receiptTopSweet}」.`
+                       : `你是个坚定的「${receiptTopTemp} · ${receiptTopSweet}」党，这是你不妥协的口味底线。`;
+                  }
+
+                  return (
+                    <>
+                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                        {intro}
+                      </p>
+                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                        {brandStr}
+                      </p>
+                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                        {specStr}
+                      </p>
+                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                        {prefLanguage === 'English' 
+                          ? `Total investment in happiness: ￥${statCost.toFixed(1)}.` 
+                          : `你累计向饮茶事业投资了 ￥${statCost.toFixed(1)}，实力有目共睹。`}
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* 底部成就印章区域 */}
+              <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-end relative z-10">
+                <div className="text-[10px] text-white/40 font-mono">
+                  GENERATED BY<br/>SUGAR ULTRA
+                </div>
+                {/* 借用你之前的印章逻辑，做成潮牌贴纸效果 */}
+                <div className="border-[3px] border-pink-400 text-pink-300 px-4 py-2 font-black text-[16px] tracking-widest uppercase transform rotate-6 bg-black/20 backdrop-blur-sm shadow-[0_0_15px_rgba(244,114,182,0.3)]">
+                  {getReceiptTitle(statCups, statPeriod, prefLanguage)}
+                </div>
+              </div>
+            </motion.div>
+            
+            {/* 悬浮操作栏 (不包含在截图中) */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-4 mt-8 w-full max-w-[360px]">
+                <button onClick={() => handleSaveReceipt(posterRef)} className="flex-1 py-3.5 rounded-full border border-white/30 text-white font-bold bg-white/10 backdrop-blur-md tracking-widest text-sm hover:bg-white/20 transition-colors">
+                    {prefLanguage === 'English' ? 'SAVE' : '保存海报'}
+                </button>
+                <button onClick={() => handleShareReceipt(posterRef)} className="flex-1 py-3.5 rounded-full bg-white text-black font-bold tracking-widest text-sm hover:bg-gray-100 transition-colors shadow-lg">
+                    {prefLanguage === 'English' ? 'SHARE' : '分享海报'}
+                </button>
+            </motion.div>
+            
+            <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShowPosterModal(false)} className="mt-8 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md text-white flex items-center justify-center font-bold text-xl pb-1 hover:bg-white/20 transition-colors border border-white/20">
                 <X size={22} strokeWidth={2.5} />
             </motion.button>
           </motion.div>
