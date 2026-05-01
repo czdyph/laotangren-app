@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --color-bg-app: var(--bg-app);
+  --color-bg-card: var(--bg-card);
+  --color-bg-input: var(--bg-input);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-border-main: var(--border-main);
+}
+
+:root {
+  --bg-app: #F8F7F4;
+  --bg-card: #FFFFFF;
+  --bg-input: #F5F4F2;
+  --text-main: #1F1B18;
+  --text-muted: #8E8A84;
+  --border-main: #EAE8E3;
+  --accent-color: #8E7558;
+  --app-font-scale: 1;
+  --app-density: 1;
+}
+
+.dark {
+  --bg-app: #1A1A1A;
+  --bg-card: #282828;
+  --bg-input: #383838;
+  --text-main: #F5F4F2;
+  --text-muted: #A09C96;
+  --border-main: #4A4A4A;
+}
+
+body {
+  font-size: calc(16px * var(--app-font-scale));
+}
+
+.app-density {
+  gap: calc(1rem * var(--app-density));
+}

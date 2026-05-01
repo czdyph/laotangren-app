@@ -1,0 +1,8 @@
+{
+  "name": "奶茶品鉴",
+  "description": "极简品鉴风奶茶记录 App，支持本地 AI 自动抠图",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
