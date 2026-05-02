@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import localforage from 'localforage';
 import { motion, AnimatePresence } from "motion/react";
-import { Coffee, BarChart3, Settings as SettingsIcon, Plus, CalendarDays, Edit2, Share, Trash2, ChevronLeft, ChevronRight, Video, Moon, Sun, Cloud, Trash, MessageSquare, Info, User, Snowflake, Flame, X, Search } from "lucide-react";
+import { Coffee, BarChart3, Settings as SettingsIcon, Plus, CalendarDays, Edit2, Share, Trash2, ChevronLeft, ChevronRight, Video, Moon, Sun, Cloud, Trash, MessageSquare, Info, User, Snowflake, Flame, X, Search, Trophy} from "lucide-react";
+import * as htmlToImage from 'html-to-image';
 
 interface DrinkRecord {
   id: string;
@@ -155,7 +156,7 @@ const compressImage = (file: File, maxWidth = 800): Promise<string> => {
         
         ctx.drawImage(img, 0, 0, width, height);
         // 核心：强制转换为 JPEG 格式并降低质量到 80%，极大减小体积
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        resolve(canvas.toDataURL('image/webp', 0.8));
       };
       img.onerror = (error) => reject(error);
     };
@@ -217,6 +218,8 @@ export default function App() {
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showAchievementsModal, setShowAchievementsModal] = useState(false);
+  const [selectedAchv, setSelectedAchv] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [shareRecord, setShareRecord] = useState<DrinkRecord | null>(null);
   const singleReceiptRef = useRef<HTMLDivElement>(null);
@@ -614,6 +617,49 @@ const handleSaveDrink = () => {
     } catch (error) {
       console.error("Share receipt failed:", error);
       showToast(prefLanguage === "English" ? "Share failed" : "分享失败", 'error');
+    }
+  };
+  // 📸 核心：生成成就高光海报并唤起分享
+  const handleShareAchievement = async () => {
+    // 1. 定位到我们要截图的卡片节点
+    const node = document.getElementById('achievement-card');
+    if (!node || !selectedAchv) return;
+
+    try {
+      showToast(prefLanguage === 'English' ? 'Generating poster...' : '正在生成高光海报...', 'info');
+      triggerHaptic('medium');
+
+      // 2. 将 DOM 转为 Blob 图片（提高像素比以保证在手机上清晰）
+      const blob = await htmlToImage.toBlob(node, {
+        pixelRatio: 3, // 3倍清晰度，发朋友圈不模糊
+        backgroundColor: isDark ? '#1a1a1e' : '#faf8f5', // 根据主题设置背景底色
+      });
+
+      if (!blob) throw new Error('Blob generation failed');
+
+      // 3. 封装成文件对象
+      const fileName = `老糖人成就-${selectedAchv.title}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // 4. 优先尝试系统原生分享 (iOS/安卓可直接唤起微信/相册)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `我解锁了《老糖人》成就：${selectedAchv.title}`,
+          text: selectedAchv.buildText(selectedAchv.trigger).comment,
+        });
+      } else {
+        // 5. 降级方案：不支持原生分享时，直接下载图片到本地
+        const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 3 });
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = dataUrl;
+        link.click();
+        showToast(prefLanguage === 'English' ? 'Saved to gallery' : '✨ 已保存到相册，去分享吧！', 'success');
+      }
+    } catch (error) {
+      console.error('Share failed:', error);
+      showToast(prefLanguage === 'English' ? 'Generation failed' : '海报生成失败', 'error');
     }
   };
 
@@ -1248,18 +1294,24 @@ const handleSaveDrink = () => {
                             
                             <div className="flex-1">
                               <div className="flex flex-col mb-1">
-                                {record.brand && (
-                                  <span className="text-[11px] bg-border-main px-2 py-0.5 rounded-full text-text-muted font-bold self-start mb-1">
-                                    {record.brand}
-                                  </span>
-                                )}
+                                {/* 👉 将品牌标签和冷热图标放在同一个横向容器中 */}
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {record.brand && (
+                                    <span className="text-[11px] bg-border-main px-2 py-0.5 rounded-full text-text-muted font-bold">
+                                      {record.brand}
+                                    </span>
+                                  )}
+                                  {/* 使用 Emoji 替代 SVG 图标，质感更好 */}
+                                  {record.temperature && record.temperature.includes('冰') ? (
+                                    <span className="text-[14px] leading-none drop-shadow-sm">🧊</span>
+                                  ) : record.temperature === '热' ? (
+                                    <span className="text-[14px] leading-none drop-shadow-sm text-red-500">♨️</span> 
+                                  ) : null}
+                                </div>
+                                
+                                {/* 饮品名称独立清爽显示 */}
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-text-main text-base leading-tight">{record.type}</span>
-                                  {record.temperature && record.temperature.includes('冰') ? (
-                                    <Snowflake size={14} className="text-[#60A5FA]" strokeWidth={2.5} />
-                                  ) : record.temperature === '热' ? (
-                                    <Flame size={14} className="text-[#EF4444]" strokeWidth={2.5} />
-                                  ) : null}
                                 </div>
                               </div>
                               <div className="text-xs text-text-muted font-medium flex items-center gap-1.5 mt-1">
@@ -1509,6 +1561,7 @@ const handleSaveDrink = () => {
                   ))}
                 </div>
               </div>
+              
             </div>
           </motion.div>
         )}
@@ -1518,6 +1571,98 @@ const handleSaveDrink = () => {
             <h1 className="text-4xl font-bold mb-6 tracking-tight text-text-main">
               {prefLanguage === 'English' ? 'Settings' : '设置'}
             </h1>
+          {/* 👇 终极视觉优化：至尊荣誉大奖牌入口 */}
+            {(() => {
+                // 🧠 统一核心成就判断引擎 (入口和弹窗保持绝对一致)
+                const unlocked = new Set<string>();
+                if (records.length >= 1) unlocked.add('first_blood'); 
+                if (records.length >= 200) unlocked.add('fifty_cups'); // 奶茶土匪：200杯
+                
+                const brands = new Set(records.map(r => r.brand).filter(Boolean));
+                if (brands.size >= 15) unlocked.add('five_brands'); // 海王：15个品牌
+                
+                const noSugarCount = records.filter(r => r.sweetness === '不另外加糖').length;
+                if (noSugarCount >= 50) unlocked.add('no_sugar'); // 苦行僧：50杯无糖
+                
+                if (records.some(r => r.cost >= 15)) unlocked.add('rich_guy'); // 破产：单杯>15元
+                
+                // 👉 修复：按真实的喝奶茶日期从新到老排（逆序），解决补录数据导致的顺序错乱
+                let loyal = false;
+                let currentConsecutive = 1;
+                const sorted = [...records].sort((a, b) => {
+                    if (b.year !== a.year) return b.year - a.year;
+                    if (b.month !== a.month) return b.month - a.month;
+                    if (b.day !== a.day) return b.day - a.day;
+                    return parseInt(b.id) - parseInt(a.id); // 同一天的，晚录入的算新
+                });
+                
+                for(let i=0; i<sorted.length - 1; i++) {
+                   if (sorted[i].brand && sorted[i].brand === sorted[i+1].brand) {
+                       currentConsecutive++;
+                       if (currentConsecutive >= 20) { loyal = true; break; }
+                   } else {
+                       currentConsecutive = 1; // 品牌中断，重新计数
+                   }
+                }
+                if (loyal) unlocked.add('loyalist');
+
+                const iceCount = records.filter(r => r.temperature?.includes('冰')).length;
+                if (iceCount >= 100) unlocked.add('ice_king'); // 绝对零度：100杯冷饮
+                
+                const hotCount = records.filter(r => r.temperature?.includes('热')).length;
+                if (hotCount >= 100) unlocked.add('hot_king'); // 养生达人：100杯热饮
+
+                const totalCount = 8; 
+                const unlockedCount = unlocked.size;
+
+                return (
+                    <div 
+                        onClick={() => setShowAchievementsModal(true)}
+                        className="w-full relative rounded-[24px] p-6 shadow-[0_12px_40px_rgba(142,117,88,0.2)] cursor-pointer hover:shadow-2xl active:scale-95 transition-all overflow-hidden border-4"
+                        style={{
+                            // 1. 拟物化金色拉丝金属边框
+                            borderColor: '#D2B48C',
+                            // 2. 奢华的黑金拉丝纹理背景
+                            background: 'linear-gradient(135deg, #2D1B10 0%, #3E2723 50%, #2D1B10 100%)'
+                        }}
+                    >
+                        {/* 3. 霓虹金色光晕装饰 (纯前端光影魔法) */}
+                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#D2B48C]/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-[#A58E72]/15 rounded-full blur-2xl pointer-events-none"></div>
+
+                        <div className="flex flex-col relative z-10">
+                            {/* 顶部标题与图标行 */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-col">
+                                    <h3 className="text-[20px] font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-[#D2B48C] to-white">
+                                        {prefLanguage === 'English' ? 'MY ACHVMENTS' : '老糖人荣誉勋章'}
+                                    </h3>
+                                    <div className="text-[11px] font-bold text-[#A58E72]/80 mt-0.5 font-mono">
+                                        MILK TEA MILESTONES
+                                    </div>
+                                </div>
+                                <div className="text-4xl filter drop-shadow-md">👑</div>
+                            </div>
+
+                            {/* 👉 核心诱惑：实时解锁进度展示 */}
+                            <div className="flex items-center gap-3 bg-white/5 rounded-full px-4 py-2 border border-white/5 shadow-inner">
+                                <span className="text-[11px] font-bold text-white tracking-wider flex items-center gap-1.5">
+                                    <Trophy size={14} className="text-[#D2B48C]" strokeWidth={2.5}/>
+                                    {prefLanguage === 'English' ? `UNLOCKED: ${unlockedCount}/${totalCount}` : `已解锁: ${unlockedCount} / ${totalCount}`}
+                                </span>
+                                <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                    <motion.div 
+                                        initial={{ width: 0 }} animate={{ width: `${(unlockedCount / totalCount) * 100}%` }} transition={{ duration: 1.5, type: 'spring', delay: 0.2 }}
+                                        className="h-full rounded-full bg-gradient-to-r from-[#8E7558] to-[#D2B48C]"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* 下面是你原本的搜索框和设置项... */}
             <div className="bg-bg-card rounded-[24px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4">
               <div className="p-4 border-b border-bg-input">
                 <input type="text" value={settingsSearch} onChange={(e) => setSettingsSearch(e.target.value)} placeholder={prefLanguage === 'English' ? 'Search settings...' : '搜索设置项...'} className="w-full bg-bg-input rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all" />
@@ -2243,6 +2388,243 @@ const handleSaveDrink = () => {
             <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShowPosterModal(false)} className="mt-8 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md text-white flex items-center justify-center font-bold text-xl pb-1 hover:bg-white/20 transition-colors border border-white/20">
                 <X size={22} strokeWidth={2.5} />
             </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+        {/* 🌟 成就勋章墙弹窗 (全自动计算逻辑 + 时光倒流算法) */}
+      <AnimatePresence>
+        {showAchievementsModal && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            className="fixed inset-0 z-[120] bg-bg-app flex flex-col sm:max-w-[420px] sm:mx-auto sm:border-x sm:border-border-main"
+          >
+            {(() => {
+             // 🧠 核心：时光倒流算法 (按真实的饮用日期从老到新排，解决补录数据时间错乱Bug)
+              const unlockedMap = new Map(); // 用于存储成就ID和对应的【触发饮品记录】
+              const chronological = [...records].sort((a, b) => {
+                  if (a.year !== b.year) return a.year - b.year;
+                  if (a.month !== b.month) return a.month - b.month;
+                  if (a.day !== b.day) return a.day - b.day;
+                  return parseInt(a.id) - parseInt(b.id); // 同一天的按录入先后顺序
+              });
+              let brandSet = new Set();
+              let noSugarCount = 0;
+              let iceCount = 0;
+              let hotCount = 0;
+              let loyalCount = 1;
+
+              for (let i = 0; i < chronological.length; i++) {
+                 const r = chronological[i];
+
+                 // 1. 初次邂逅
+                 if (i === 0 && !unlockedMap.has('first_blood')) unlockedMap.set('first_blood', r);
+                 // 8. 奶茶土匪
+                 if (i === 199 && !unlockedMap.has('fifty_cups')) unlockedMap.set('fifty_cups', r);
+
+                 // 3. 海王品鉴
+                 if (r.brand && !brandSet.has(r.brand)) {
+                     brandSet.add(r.brand);
+                     if (brandSet.size === 15 && !unlockedMap.has('five_brands')) unlockedMap.set('five_brands', r);
+                 }
+
+                 // 4. 清糖苦行僧
+                 if (r.sweetness === '不另外加糖') {
+                     noSugarCount++;
+                     if (noSugarCount === 50 && !unlockedMap.has('no_sugar')) unlockedMap.set('no_sugar', r);
+                 }
+
+                 // 7. 破产预警
+                 if (r.cost >= 15 && !unlockedMap.has('rich_guy')) unlockedMap.set('rich_guy', r);
+
+                 // 2. 品牌死忠
+                 if (i > 0) {
+                     if (r.brand && r.brand === chronological[i-1].brand) {
+                         loyalCount++;
+                         if (loyalCount === 20 && !unlockedMap.has('loyalist')) unlockedMap.set('loyalist', r);
+                     } else {
+                         loyalCount = 1; // 中断，重新计算
+                     }
+                 }
+
+                 // 5. 绝对零度
+                 if (r.temperature?.includes('冰')) {
+                     iceCount++;
+                     if (iceCount === 100 && !unlockedMap.has('ice_king')) unlockedMap.set('ice_king', r);
+                 }
+
+                 // 6. 养生达人
+                 if (r.temperature?.includes('热')) {
+                     hotCount++;
+                     if (hotCount === 100 && !unlockedMap.has('hot_king')) unlockedMap.set('hot_king', r);
+                 }
+              }
+
+              // 成就字典数据 (注入了你刚才定稿的专属文案)
+              const achievementsList = [
+                { id: 'first_blood', icon: '🍼', title: '初次邂逅', desc: '记录你的第一杯饮品', isUnlocked: unlockedMap.has('first_blood'), trigger: unlockedMap.get('first_blood'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，命运的齿轮开始转动。`, comment: `这是你在《老糖人》记录的第一杯奶茶。当时的你一定没想过，这仅仅是一条“不归路”的开始……` }) },
+                { id: 'loyalist', icon: '❤️', title: '品牌死忠', desc: '连续 20 杯喝同一个品牌', isUnlocked: unlockedMap.has('loyalist'), trigger: unlockedMap.get('loyalist'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你达成了最高级别的羁绊。`, comment: `连续 20 杯「${t.brand || '该品牌'}」！你这已经不是爱了，你简直是他们家流落在外的野生代言人。建议拿着这串记录直接去找老板入股。` }) },
+                { id: 'five_brands', icon: '🌍', title: '海王品鉴', desc: '品尝过 15 个不同的品牌', isUnlocked: unlockedMap.has('five_brands'), trigger: unlockedMap.get('five_brands'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的花心版图再次扩张。`, comment: `在尝遍了 14 个品牌后，最终是这杯「${t.brand || '新品牌'}」帮你补齐了海王拼图。你没有偏爱，你只是心碎成了 15 瓣，每一瓣都爱着不同的快乐水。` }) },
+                { id: 'no_sugar', icon: '🧘', title: '清糖苦行僧', desc: '累计喝过 50 杯不另外加糖', isUnlocked: unlockedMap.has('no_sugar'), trigger: unlockedMap.get('no_sugar'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你立地成佛。`, comment: `累计 50 杯“不另外加糖”！你点的是奶茶吗？不，你点的是对世俗欲望的无情嘲讽。全国 99% 的清糖佛子正在为你点赞。` }) },
+                { id: 'ice_king', icon: '🧊', title: '绝对零度', desc: '累计喝过 100 杯冷饮', isUnlocked: unlockedMap.has('ice_king'), trigger: unlockedMap.get('ice_king'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的胃壁凝结成冰。`, comment: `第 100 杯冷饮下肚！就算是凛冬将至，也无法阻止你对冰块的狂热。承认吧，你的血液里现在流淌的都是冰水混合物。` }) },
+                { id: 'hot_king', icon: '♨️', title: '养生达人', desc: '累计喝过 100 杯热饮', isUnlocked: unlockedMap.has('hot_king'), trigger: unlockedMap.get('hot_king'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，保温杯里泡枸杞。`, comment: `第 100 杯热饮！你成功把奶茶喝出了老中医熬药的养生感。这杯烫嘴的「${t.type}」，是你对多巴胺最后的倔强。` }) },
+                { id: 'rich_guy', icon: '💸', title: '破产预警', desc: '点过一杯价格超过 15 元的饮品', isUnlocked: unlockedMap.has('rich_guy'), trigger: unlockedMap.get('rich_guy'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的钱包发出了悲鸣。`, comment: `这杯高达 ${t.cost} 元的「${t.brand || ''} · ${t.type}」，刺痛了钱包，却抚慰了灵魂。没关系，钱没有消失，它只是变成了你身上的肉肉陪着你。` }) },
+                { id: 'fifty_cups', icon: '👑', title: '奶茶土匪', desc: '累计记录达到 200 杯', isUnlocked: unlockedMap.has('fifty_cups'), trigger: unlockedMap.get('fifty_cups'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你登上了糖分王座。`, comment: `第 200 杯！你已经不是普通的爱好者了，你是让整条街奶茶店老板都笑得合不拢嘴的老糖人。` }) },
+              ];
+
+              const unlockedCount = achievementsList.filter(a => a.isUnlocked).length;
+
+              return (
+                <>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 pt-12 pb-4 bg-bg-app z-20">
+                    <div className="flex flex-col">
+                      <h2 className="text-3xl font-black text-text-main tracking-tight mb-1">
+                        {prefLanguage === 'English' ? 'Achievements' : '成就图鉴'}
+                      </h2>
+                      <span className="text-sm font-bold text-[#8E7558]">
+                        已解锁: {unlockedCount} / {achievementsList.length}
+                      </span>
+                    </div>
+                    <button onClick={() => setShowAchievementsModal(false)} className="w-9 h-9 flex items-center justify-center rounded-full bg-bg-input text-text-muted hover:text-text-main transition-colors shadow-sm">
+                      <X size={20} strokeWidth={2.5} />
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto px-5 py-2 pb-10 custom-scrollbar relative">
+                    <div className="w-full h-2 bg-bg-input rounded-full mb-6 overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(unlockedCount / achievementsList.length) * 100}%` }} transition={{ duration: 1 }} className="h-full bg-gradient-to-r from-[#8E7558] to-[#D2B48C] rounded-full" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {achievementsList.map((ach, idx) => (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: idx * 0.05 }}
+                          key={ach.id}
+                          // 👇 核心交互：点击已解锁的展示SSR卡片，点击未解锁的震动+Toast提示
+                          onClick={() => {
+                              if (ach.isUnlocked) {
+                                  triggerHaptic('medium');
+                                  setSelectedAchv(ach);
+                              } else {
+                                  triggerHaptic('light');
+                                  showToast('还差一点哦，继续喝起来吧！', 'info');
+                              }
+                          }}
+                          className={`relative p-4 rounded-[24px] border-2 flex flex-col items-center text-center transition-all overflow-hidden ${
+                            ach.isUnlocked 
+                              ? 'bg-bg-card border-[#8E7558]/30 shadow-[0_4px_15px_rgba(142,117,88,0.1)] cursor-pointer hover:scale-105 active:scale-95' 
+                              : 'bg-bg-input/30 border-transparent grayscale opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          {ach.isUnlocked && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 bg-[#8E7558]/10 rounded-full blur-xl pointer-events-none"></div>}
+                          <div className="text-4xl mb-3 mt-2 relative z-10 drop-shadow-md">{ach.isUnlocked ? ach.icon : '🔒'}</div>
+                          <div className={`font-black text-sm mb-1 z-10 ${ach.isUnlocked ? 'text-text-main' : 'text-text-muted'}`}>{ach.title}</div>
+                          <div className="text-[10px] text-text-muted font-medium z-10">{ach.desc}</div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+        {/* 🌟 隐藏款 SSR 高光成就展示卡片 (Centered Modal) */}
+      <AnimatePresence>
+        {selectedAchv && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              id="achievement-card" // 👈 添加这个 ID
+              initial={{ scale: 0.8, y: 20, rotateX: 20 }}
+              animate={{ scale: 1, y: 0, rotateX: 0 }}
+              exit={{ scale: 0.8, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              className="w-full max-w-[340px] bg-bg-card rounded-[32px] p-6 relative shadow-[0_30px_80px_rgba(0,0,0,0.4)] flex flex-col items-center text-center overflow-hidden border border-border-main/50"
+            >
+              {/* 顶部神圣光晕 */}
+              <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#D2B48C]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+              {/* 标题区 */}
+              <div className="text-[64px] mb-2 relative z-10 drop-shadow-xl filter">{selectedAchv.icon}</div>
+              <h2 className="text-3xl font-black text-text-main mb-2 tracking-tight relative z-10">{selectedAchv.title}</h2>
+              <div className="text-[11px] font-bold text-[#8E7558] mb-6 relative z-10 bg-[#8E7558]/10 px-3 py-1 rounded-full">
+                {selectedAchv.buildText(selectedAchv.trigger).date}
+              </div>
+
+              {/* 核心相框：高光见证者 */}
+              <div className="w-full bg-bg-input/60 rounded-[20px] p-3 flex items-center gap-4 mb-6 shadow-inner relative z-10 border border-border-main/50">
+                 <div className="w-16 h-20 shrink-0 bg-white/50 rounded-xl flex items-center justify-center shadow-sm p-1">
+                    {isExportableImageSrc(selectedAchv.trigger.imageUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={selectedAchv.trigger.imageUrl} alt="drink" className="w-full h-full object-contain filter drop-shadow-md scale-110" />
+                    ) : (
+                        <Coffee size={32} className="text-text-muted" strokeWidth={1.8} />
+                    )}
+                 </div>
+                 <div className="flex-1 flex flex-col justify-center items-start text-left">
+                    {/* 1. 顶部：关键见证者 + 品牌名联合显示 */}
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                       <span className="text-[10px] text-text-muted font-bold tracking-widest">关键见证者</span>
+                       {selectedAchv.trigger.brand && (
+                         <>
+                           <span className="text-[10px] text-border-main/80">|</span>
+                           <span className="text-[10px] font-bold text-[#8E7558]">{selectedAchv.trigger.brand}</span>
+                         </>
+                       )}
+                    </div>
+                    
+                    {/* 2. 中间：饮品名独占一行，去掉 truncate 限制，允许长名字自动换行 */}
+                    <div className="font-black text-[15px] text-text-main leading-snug mb-2 w-full break-words whitespace-normal line-clamp-2">
+                       {selectedAchv.trigger.type}
+                    </div>
+                    
+                    {/* 3. 底部：规格标签 */}
+                    <div className="text-[10px] text-[#8E7558] font-medium bg-[#8E7558]/10 px-2 py-0.5 rounded-md">
+                       {selectedAchv.trigger.size || '中杯'} · {selectedAchv.trigger.temperature || '正常冰'} · {selectedAchv.trigger.sweetness || '标准糖'}
+                    </div>
+                 </div>
+              </div>
+
+              {/* 毒舌/治愈评语 */}
+              <p className="text-[14px] text-text-main leading-relaxed font-medium mb-8 relative z-10 opacity-90">
+                {selectedAchv.buildText(selectedAchv.trigger).comment}
+              </p>
+
+              <button 
+                onClick={handleShareAchievement} // 👈 替换掉原来的演示代码
+                className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white py-3.5 rounded-full font-bold shadow-[0_8px_20px_rgba(142,117,88,0.3)] active:scale-95 transition-all relative z-10 flex items-center justify-center gap-2"
+              >
+                <Share size={18} /> {/* 加上这个图标会让按钮更精致 */}
+                分享我的高光时刻
+              </button>
+
+              <button 
+                onClick={() => setSelectedAchv(null)} 
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-bg-input/80 flex items-center justify-center text-text-muted hover:text-text-main transition-colors z-20"
+              >
+                <X size={18} strokeWidth={3} />
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
