@@ -2,8 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import localforage from 'localforage';
-import { motion, AnimatePresence } from "motion/react";
-import { Coffee, BarChart3, Settings as SettingsIcon, Plus, CalendarDays, Edit2, Share, Trash2, ChevronLeft, ChevronRight, Video, Moon, Sun, Cloud, Trash, MessageSquare, Info, User, Snowflake, Flame, X, Search, Trophy} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Coffee, BarChart3, Settings as SettingsIcon, Plus, Edit2, Share, Trash2, ChevronLeft, ChevronRight, MessageSquare, Info, Flame, X, Search, Trophy} from "lucide-react";
 import * as htmlToImage from 'html-to-image';
 
 interface DrinkRecord {
@@ -33,24 +33,29 @@ const getBrandKey = (brand: string) => {
 
   const rules: Record<string, string[]> = {
     CoCo: ["coco", "都可"],
-    霸王茶姬: ["霸王茶姬", "bwcj"],
-    茶百道: ["茶百道", "cbd"],
-    茶话弄: ["茶话弄", "chn"],
+    霸王茶姬: ["霸王茶姬", "bwcj","bw"],
+    茶百道: ["茶百道", "cbd","cb"],
+    茶话弄: ["茶话弄", "chn","ch"],
     古茗: ["古茗", "gm"],
-    沪上阿姨: ["沪上阿姨", "hsay"],
+    沪上阿姨: ["沪上阿姨", "hsay","hs"],
     眷茶: ["眷茶", "jc"],
     库迪咖啡: ["库迪", "kd"],
-    蜜雪冰城: ["蜜雪冰城", "mxbc"],
-    茉莉奶白: ["茉莉奶白", "mlnb"],
+    蜜雪冰城: ["蜜雪冰城", "mxbc","mx"],
+    茉莉奶白: ["茉莉奶白", "mlnb","ml"],
     奈雪: ["奈雪", "nx"],
     瑞幸: ["瑞幸", "rx"],
-    书亦烧仙草: ["书亦烧仙草", "sysxc"],
+    书亦烧仙草: ["书亦烧仙草", "sysxc","sys"],
     喜茶: ["喜茶", "xc"],
-    幸运咖: ["幸运咖", "xyk"],
-    爷爷不泡茶: ["爷爷不泡茶", "yybpc"],
+    幸运咖: ["幸运咖", "xyk","xy"],
+    爷爷不泡茶: ["爷爷不泡茶", "yybpc","yy"],
     一点点: ["一点点", "ydd"],
-    益禾堂: ["益禾堂", "yht"],
-    柠季: ["柠季", "nj"]
+    益禾堂: ["益禾堂", "yht","yh"],
+    柠季: ["柠季", "nj"],
+    陆藜: ["陆藜", "ll"],
+    甜啦啦: ["甜啦啦", "tll"],
+    阿水大杯茶: ["阿水大杯茶", "asdbc","as"],
+    冰淳茶饮: ["冰淳茶饮", "bccy","bc"],
+    挪瓦咖啡: ["挪瓦咖啡", "nv"]
   };
 
   for (const [key, keywords] of Object.entries(rules)) {
@@ -84,40 +89,47 @@ const getBrandLogoFile = (brand: string) => {
     爷爷不泡茶: "爷爷不泡茶.png",
     一点点: "一点点.png",
     益禾堂: "益禾堂.png",
-    柠季: "柠季.png"
+    柠季: "柠季.png",
+    陆藜: "陆藜.png",
+    甜啦啦: "甜啦啦.png",
+    阿水大杯茶: "阿水大杯茶.png",
+    冰淳茶饮: "冰淳茶饮.png",
+    挪瓦咖啡: "挪瓦咖啡.png"
   };
   return logos[key] || null;
 };
 
 const getSweetnessOptions = (brand: string) => {
   const brandKey = getBrandKey(brand);
-  
   if (brandKey === "瑞幸") {
-    return ["不另外加糖", "微糖", "少少糖", "少糖", "标准糖"];
+    return ["不另外加糖", "微甜", "少少甜", "少甜", "标准甜"];
   }
   if (brandKey === "库迪咖啡") {
-    return ["不另外加糖", "1/4糖", "半糖", "全糖"];
+    return ["不额外加糖", "1/4糖", "半糖", "全糖"];
   }
-  if (brandKey === "喜茶") {
-    return ["不另外加糖", "少少少糖", "少少糖", "少糖"];
-  }
-  if (brandKey === "奈雪") {
-    return ["不另外加糖", "微糖", "少少糖", "少糖", "正常糖"];
+  if (brandKey === "眷茶") {
+    return ["不另外加糖", "少少糖", "少糖", "标准糖"];
   }
   if (brandKey === "茶话弄") {
-    return ["不另外加糖", "少少少糖", "少少糖", "少糖", "标准糖"];
-  }
-  if (brandKey === "书亦烧仙草") {
-    return ["不另外加糖", "少少少糖", "少少糖", "少糖", "标准糖"];
+    return ["不另外加糖", "少少少甜", "少少甜", "少甜", "标准甜"];
   }
   if (brandKey === "霸王茶姬") {
     return ["不另外加糖", "微糖", "半糖", "少糖", "标准糖"];
   }
+  if (brandKey === "喜茶") {
+    return ["不另外加甜", "少少少甜", "少少甜", "少甜"];
+  }
+  if (brandKey === "奈雪") {
+    return ["不另外加糖", "微甜", "少少甜", "少甜", "正常甜"];
+  }
+  if (brandKey === "书亦烧仙草") {
+    return ["不另外加糖", "少少糖", "少糖", "标准糖"];
+  }
   if (brandKey === "幸运咖") {
     return ["不另外加糖", "半糖", "标准糖"];
   }
-  if (brandKey === "眷茶") {
-    return ["不另外加糖", "少少糖", "少糖", "标准糖"];
+  if (brandKey === "陆藜") {
+    return ["无糖", "少糖", "正常糖"];
   }
   return ["不另外加糖", "三分糖", "五分糖", "七分糖", "标准糖"];
 };
@@ -155,7 +167,7 @@ const compressImage = (file: File, maxWidth = 800): Promise<string> => {
         }
         
         ctx.drawImage(img, 0, 0, width, height);
-        // 核心：强制转换为 JPEG 格式并降低质量到 80%，极大减小体积
+        // 核心：强制转换为 webp 格式并降低质量到 80%，极大减小体积
         resolve(canvas.toDataURL('image/webp', 0.8));
       };
       img.onerror = (error) => reject(error);
@@ -163,7 +175,7 @@ const compressImage = (file: File, maxWidth = 800): Promise<string> => {
     reader.onerror = (error) => reject(error);
   });
 };
-// 🌟 针对历史存量数据的压缩函数 (把庞大的老 Base64 转成小巧的 JPEG)
+// 🌟 针对历史存量数据的压缩函数 (把庞大的老 Base64 转成小巧的 webp 格式)
 const compressBase64Image = (base64Str: string, maxWidth = 800): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -415,6 +427,8 @@ export default function App() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const receiptCardRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const settingMatches = (keywords: string[]) => {
     if (!settingsSearch.trim()) return true;
     const q = settingsSearch.toLowerCase();
@@ -508,6 +522,10 @@ const handleSaveDrink = () => {
     if (!currentDate) return;
     
     // 👉 新增：解析表单里的日期
+    if (!draftDate) {
+  showToast("请选择有效日期", "error");
+  return;
+}
     const [dYear, dMonth, dDay] = draftDate.split('-').map(Number);
     
     const newRecord: DrinkRecord = {
@@ -540,8 +558,7 @@ const handleSaveDrink = () => {
     await waitForReceiptAssets(receiptElement);
 
     try {
-      const { toBlob } = await import("html-to-image");
-      const blob = await toBlob(receiptElement, {
+      const blob = await htmlToImage.toBlob(receiptElement, {
         pixelRatio: 2,
         cacheBust: true,
         backgroundColor: "#f8f8f8",
@@ -581,7 +598,7 @@ const handleSaveDrink = () => {
       a.remove();
       URL.revokeObjectURL(url);
       
-      showToast(prefLanguage === "English" ? "Receipt saved to gallery!" : "✨ 小票已保存到相册！", 'success');
+      showToast(prefLanguage === "English" ? "Receipt saved to gallery!" : "小票已保存到相册！", 'success');
     } catch (error) {
       console.error("Save receipt failed:", error);
       showToast(prefLanguage === "English" ? "Receipt export failed" : "小票导出失败", 'error');
@@ -655,7 +672,7 @@ const handleSaveDrink = () => {
         link.download = fileName;
         link.href = dataUrl;
         link.click();
-        showToast(prefLanguage === 'English' ? 'Saved to gallery' : '✨ 已保存到相册，去分享吧！', 'success');
+        showToast(prefLanguage === 'English' ? 'Saved to gallery' : '已保存到相册，去分享吧！', 'success');
       }
     } catch (error) {
       console.error('Share failed:', error);
@@ -676,7 +693,7 @@ const handleSaveDrink = () => {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    showToast(prefLanguage === 'English' ? 'Backup Exported!' : '✨ 备份数据导出成功！', 'success');
+    showToast(prefLanguage === 'English' ? 'Backup Exported!' : '备份数据导出成功！', 'success');
   };
 
   // 导入数据 (读取选中的 json 文件并覆盖当前记录)
@@ -816,7 +833,67 @@ const handleSaveDrink = () => {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanks = Array.from({ length: firstDayOfWeek }, (_, i) => i);
   const weekDaysFull = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+// 🧠 意志力与打卡计算引擎 (逻辑修正：只要连胜未断，优先显示打卡)
+  const disciplineStats = (() => {
+    if (records.length === 0) return { streak: 0, sober: 0, type: 'none', comment: "开启你的第一杯吧！" };
 
+    const toDateStr = (y: number, m: number, d: number) => 
+      `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    const uniqueDays = Array.from(new Set(records.map(r => toDateStr(r.year, r.month, r.day))))
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    const now = new Date();
+    const todayClean = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStr = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const yesterday = new Date(todayClean);
+    yesterday.setDate(todayClean.getDate() - 1);
+    const yesterdayStr = toDateStr(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+    const drankToday = uniqueDays[0] === todayStr;
+    const drankYesterday = uniqueDays.includes(yesterdayStr);
+
+    // 1. 计算连续打卡 (Streak)
+    let streak = 0;
+    if (drankToday || drankYesterday) {
+      let checkDate = new Date(drankToday ? todayClean : yesterday);
+      while (true) {
+        const checkStr = toDateStr(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate());
+        if (uniqueDays.includes(checkStr)) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+
+    // 2. 计算戒断天数 (Sober)
+    let soberDays = 0;
+    if (!drankToday) {
+      const lastDateParts = uniqueDays[0].split('-');
+      const lastDate = new Date(Number(lastDateParts[0]), Number(lastDateParts[1]) - 1, Number(lastDateParts[2]));
+      const diffTime = Math.max(0, todayClean.getTime() - lastDate.getTime());
+      soberDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    // 3. 决定显示类型：只要打卡未中断(今天或昨天喝过)，优先显示打卡
+    const showStreak = drankToday || (drankYesterday && streak > 0);
+    const displayType = showStreak ? 'streak' : 'sober';
+
+    // 4. 毒舌文案引擎
+    let comment = "";
+    if (showStreak) {
+      if (streak >= 7) comment = "勋章建议直接焊在脑门上。胰岛：‘求求了，歇一天吧’。";
+      else comment = "你的血管里现在流的不是血，是糖浆。";
+    } else {
+      if (soberDays >= 7) comment = "不得了！你居然扛过了 7 天。你现在呼吸的空气是不是都变甜了？";
+      else comment = "三分钟热度？别急，隔壁的优惠券正在向你招手。";
+    }
+
+    return { streak, sober: soberDays, type: displayType, comment };
+  })();
   // Stats Calculations
   const currentMonthRecords = records.filter(r => r.month === currentMonth && r.year === currentYear);
   const activeDay = selectedDay || currentDay;
@@ -899,30 +976,41 @@ const handleSaveDrink = () => {
   const unlabeledBrandName = prefLanguage === 'English' ? 'Unlabeled' : '未标记品牌';
   const otherBrandName = prefLanguage === 'English' ? 'Others' : '其他';
   // 1. 常见品牌的专属品牌色（不仅能防撞色，还能让图表极其直观）
+ // 1. 高级奶油/莫兰迪色系（降低饱和度，统一质感，告别辣眼睛的红蓝大乱炖）
   const specificBrandColors: Record<string, string> = {
-    "瑞幸": "#0F4C81",       // 瑞幸经典蓝
-    "库迪咖啡": "#BE185D",   // 库迪红/粉
-    "霸王茶姬": "#991B1B",   // 伯牙绝弦暗红
-    "茶百道": "#2563EB",     // 茶百道蓝
-    "蜜雪冰城": "#EF4444",   // 雪王红
-    "喜茶": "#3F3F46",       // 喜茶黑/深灰
-    "奈雪": "#059669",       // 奈雪绿
-    "古茗": "#EA580C",       // 古茗橙红
-    "茶话弄": "#3B82F6",     // 亮蓝色
-    "茉莉奶白": "#10B981",   // 茉莉清新绿
-    "一点点": "#15803D",     // 一点点深绿
-    "眷茶": "#F59E0B",       // 眷茶暖黄
-    "幸运咖": "#B91C1C",     // 幸运咖深红
-    "沪上阿姨": "#4F46E5",   // 靛蓝色
-    "CoCo": "#F97316",       // CoCo亮橙色
-    "未标记品牌": "#9CA3AF", // 灰色
-    "其他": "#D1D5DB"        // 浅灰色
+    "瑞幸": "#7291B3",       // 海盐雾霾蓝 (代替原本刺眼的深蓝)
+    "库迪咖啡": "#CB8282",   // 玫瑰豆沙粉
+    "霸王茶姬": "#B5736E",   // 乌龙红茶色
+    "茶百道": "#83A9D1",     // 清新天空蓝
+    "蜜雪冰城": "#E28383",   // 冰糖草莓柔红
+    "喜茶": "#A1A5A9",       // 芝士质感灰白
+    "奈雪": "#82A485",       // 幽兰抹茶绿
+    "古茗": "#D69670",       // 泰式奶茶橙
+    "茶话弄": "#8AB6AD",     // 青花瓷釉蓝绿
+    "茉莉奶白": "#A3C6A8",   // 茉莉白兰青
+    "一点点": "#769676",     // 经典绿茶青
+    "眷茶": "#D4AE75",       // 桂花酒酿暖黄
+    "幸运咖": "#AD6969",     // 深度烘焙红棕
+    "沪上阿姨": "#9A95C2",   // 鲜熬芋泥紫
+    "CoCo": "#DCA562",       // 芒果百香柔橙
+    "书亦烧仙草": "#A68679", // 仙草奶咖色
+    "爷爷不泡茶": "#7B99B5", // 东方青灰色
+    "益禾堂": "#8DAB7B",     // 烤奶青茶色
+    "柠季": "#B2C471",       // 暴打鲜柠绿
+    "未标记品牌": "#C2C2C2", // 质感浅灰
+    "其他": "#D6D6D6"        // 柔和奶灰
   };
 
-  // 2. 备选高对比度调色板（给没有专属颜色的小众品牌使用）
+  // 2. 备选高颜值调色板（给没有专属颜色的小众品牌使用，保证闭眼抽出来的颜色也好看）
   const fallbackPalette = [
-    '#F87171', '#60A5FA', '#34D399', '#FBBF24',
-    '#A78BFA', '#F472B6', '#2DD4BF', '#FB923C'
+    '#E0A5A6', // 柔桃
+    '#A0B8D1', // 雾蓝
+    '#A0C4A0', // 抹茶
+    '#E2C180', // 奶黄
+    '#B29FD6', // 芋香
+    '#D2AA8F', // 奶咖
+    '#8BB8B8', // 海盐
+    '#DCA38D'  // 珊瑚
   ];
 
   const getBrandColor = (brand: string) => {
@@ -1049,182 +1137,135 @@ const handleSaveDrink = () => {
   };
 
   return (
-    <div className="w-full min-h-[100dvh] bg-bg-app flex flex-col font-sans text-text-main sm:max-w-[420px] sm:mx-auto sm:border-x sm:border-border-main sm:shadow-2xl relative overflow-x-hidden">
+    // 👇 核心修复 1：将 min-h 换成固定的 h，并加上 overflow-hidden，彻底锁死外层页面不许动！
+    <div className="w-full h-[100dvh] overflow-hidden bg-bg-app flex flex-col font-sans text-text-main sm:max-w-[420px] sm:mx-auto sm:border-x sm:border-border-main sm:shadow-2xl relative">
       
       {/* Dynamic Content Based on Tab */}
-      <div className="flex-1 overflow-y-auto pb-36 custom-scrollbar">
+      {/* 👇 核心重构 1：外层容器在首页时不滚动，交由内部列表独立滚动！ */}
+      <div className={`flex-1 w-full relative ${activeTab === 'home' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto pb-36 custom-scrollbar scroll-smooth'}`}>
+        
         {activeTab === 'home' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-5 pt-12">
-           {/* Header */}
-            <div className="mb-6 flex justify-between items-start">
-              {/* 将高度从 5.5rem 放宽到 6.5rem，彻底解决字体变大后的遮挡问题 */}
-              <div className="relative h-[6.5rem] flex-1 overflow-hidden">
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.div 
-                    key={`${currentYear}-${currentMonth}`}
-                    initial={{ x: monthDirection * 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: -monthDirection * 20, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="absolute inset-0 flex flex-col justify-center"
-                  >
-                    {/* 减小了 mb 的距离，让视觉中心更稳 */}
-                    <h1 className="text-[2.5rem] font-bold mb-1 tracking-tight text-text-main leading-tight">
-                      {currentMonth + 1}月
-                    </h1>
-                    <p className="text-text-muted text-sm font-medium tracking-wide">
-                      {currentYear}年{currentMonth + 1}月{currentDay}日 {weekDaysFull[currentDayOfWeek]}
-                    </p>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full w-full">
+            
+{/* 📌 核心重构 2：优雅收缩，保留圆润美感，拒绝廉价压缩 */}
+            {/* 优化 1：顶部 pt-12 改为 pt-8，底部 pb-5 改为 pb-4，收紧无意义的边缘留白 */}
+            <div className="flex-none bg-bg-app px-5 pt-8 pb-4 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border-b border-border-main/40 z-20 relative">
+              
+{/* Header (精致排版) */}
+              <div className="mb-4 relative w-full">
+                {/* 👇 修复 1：将 top-1 改为 top-0，让右上角的按钮组微微上移 4px */}
+                <div className="absolute right-0 top-0 flex items-center gap-2 sm:gap-3 z-20">
+                  <button onClick={() => setShowHistoryModal(true)} className="w-8 h-8 rounded-full bg-bg-card border border-border-main/50 flex items-center justify-center text-text-muted hover:text-text-main transition-colors shadow-sm active:scale-95">
+                    <Search size={15} strokeWidth={2.5} />
+                  </button>
+                  <div className="flex items-center bg-bg-input/40 rounded-full py-1.5 px-1 shadow-sm border border-border-main/50 text-text-muted hover:bg-bg-input/80 transition-colors">
+                    <button onClick={handlePrevMonth} className="p-1 px-1.5 hover:text-text-main rounded-full transition-colors active:scale-95"><ChevronLeft size={16} strokeWidth={2.5} /></button>
+                    <div className="px-1 text-xs font-semibold tracking-wide min-w-[68px] text-center text-text-main whitespace-nowrap">{currentYear}年{currentMonth + 1}月</div>
+                    <button onClick={handleNextMonth} className="p-1 px-1.5 hover:text-text-main rounded-full transition-colors active:scale-95"><ChevronRight size={16} strokeWidth={2.5} /></button>
+                  </div>
+                </div>
+
+                <div className="w-full">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.div key={`${currentYear}-${currentMonth}`} initial={{ x: monthDirection * 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -monthDirection * 20, opacity: 0 }} transition={{ duration: 0.3, ease: "easeInOut" }} className="flex flex-col w-full">
+                      <h1 className="text-[2.2rem] font-black mb-0 tracking-tight text-text-main leading-none w-1/2">{currentMonth + 1}月</h1>
+                      
+                      {/* 👇 修复 2：将 mt-1.5 加大为 mt-3，把下方的日期和勋章行往下推 6px，彻底避开上方按钮！ */}
+                      <div className="flex justify-between items-center w-full mt-3 gap-2">
+                        <p className="text-text-muted text-[13px] font-medium tracking-wide truncate flex-1 min-w-0">
+                          {currentMonth + 1}月{currentDay}日 {weekDaysFull[currentDayOfWeek]}
+                        </p>
+                        {disciplineStats && (
+                          <div onClick={() => showToast(disciplineStats.comment, 'info')} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-bg-input/60 backdrop-blur-md border border-border-main/40 text-[10px] font-bold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0 whitespace-nowrap">
+                            {disciplineStats.type === 'streak' ? (<><Flame size={11} className="text-orange-500 fill-orange-500 shrink-0" /> <span className="text-orange-600">连续打卡 {disciplineStats.streak} 天</span></>) : (<><Trophy size={11} className="text-green-500 shrink-0" /> <span className="text-green-600">连续戒糖 {disciplineStats.sober} 天</span></>)}
+                            <span className="text-text-muted opacity-40 ml-0.5">| 吐槽</span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Calendar Card */}
+              {/* 优化 4：圆角 32px 收紧至 28px，内边距 p-5 改为 p-4 px-5（上下窄左右宽），底部间距 mb-6 改为 mb-4 */}
+              <div className="bg-bg-card rounded-[28px] p-4 px-5 shadow-[0_4px_15px_rgba(0,0,0,0.02)] mb-4 overflow-hidden border border-border-main/30">
+                <div className="grid grid-cols-7 gap-x-2 mb-2">
+                  {weekDays.map(d => (<div key={d} className="text-center text-[11px] text-text-muted font-bold">{d}</div>))}
+                </div>
+                <AnimatePresence mode="wait" initial={false}>
+                  {/* 优化 5：日历格子上下间距从 gap-y-3 微微收紧至 gap-y-2 */}
+                  <motion.div key={`${currentYear}-${currentMonth}`} initial={{ x: monthDirection * 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -monthDirection * 30, opacity: 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="grid grid-cols-7 gap-y-2 gap-x-2">
+                    {blanks.map(b => (<div key={`blank-${b}`} className="aspect-square"></div>))}
+                    
+                    {days.map(day => {
+                      const teaRecordsForDay = currentMonthRecords.filter(r => r.day === day);
+                      const firstRecord = teaRecordsForDay[0];
+                      const isSelected = selectedDay === day;
+                      const brandCounts = teaRecordsForDay.reduce((acc, record) => { const key = getBrandKey(record.brand || ""); if (!key) return acc; acc[key] = (acc[key] || 0) + 1; return acc; }, {} as Record<string, number>);
+                      const sortedBrandKeys = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]).map(([key]) => key);
+                      const brandLogos = sortedBrandKeys.map(key => getBrandLogoFile(key)).filter((logo): logo is string => Boolean(logo));
+                      const activeLogoIndex = brandLogos.length > 1 ? calendarLogoTick % brandLogos.length : 0;
+                      const activeLogo = brandLogos.length > 0 ? brandLogos[activeLogoIndex] : null;
+                      const activeLogoAlt = sortedBrandKeys.length > 0 ? sortedBrandKeys[activeLogoIndex] : "brand";
+                      const rotatedRecordIndex = teaRecordsForDay.length > 1 ? calendarLogoTick % teaRecordsForDay.length : 0;
+                      const rotatedRecord = teaRecordsForDay.length > 0 ? teaRecordsForDay[rotatedRecordIndex] : firstRecord;
+                      const uploadedImageSource = rotatedRecord?.imageUrl || firstRecord?.imageUrl || "";
+                      const uploadedImage = isExportableImageSrc(uploadedImageSource) ? uploadedImageSource : "";
+                      const shouldShowBrandLogo = calendarImageMode === 'brand' && Boolean(activeLogo);
+                      const calendarImageSrc = shouldShowBrandLogo ? `/logos/${activeLogo}` : uploadedImage.length > 4 ? uploadedImage : null;
+                      const calendarImageAlt = shouldShowBrandLogo ? activeLogoAlt : "drink";
+                      const shouldAnimateCalendarImage = shouldShowBrandLogo ? brandLogos.length > 1 : teaRecordsForDay.length > 1;
+                      const calendarImageKey = shouldAnimateCalendarImage ? `${day}-${calendarImageSrc}-${calendarLogoTick}` : `${day}-${calendarImageSrc}`;
+                      
+                     return (
+                        <button
+                          key={`day-${day}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setSelectedDay(day);
+                            setTimeout(() => {
+                              const container = scrollContainerRef.current;
+                              const target = document.getElementById(`record-date-${day}`);
+                              if (container && target) {
+                                container.scrollTo({ top: target.offsetTop - 15, behavior: 'smooth' });
+                                triggerHaptic('medium');
+                              } else {
+                                triggerHaptic('light'); 
+                              }
+                            }, 100);
+                          }}
+                          className={`aspect-square flex items-center justify-center rounded-[14px] text-sm font-medium relative overflow-hidden transition-colors cursor-pointer ${isSelected ? 'bg-[#8E7558] text-white shadow-md ring-2 ring-[#8E7558]' : (!firstRecord ? 'bg-bg-input text-text-main hover:bg-border-main' : 'bg-border-main')}`}
+                        >
+                          {firstRecord ? (
+                            <div className="absolute inset-0 flex items-center justify-center p-1">
+                              {calendarImageSrc ? (
+                                <AnimatePresence mode="wait" initial={false}>
+                                  <motion.div key={calendarImageKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeInOut" }} className="w-full h-full">
+                                    <img src={calendarImageSrc} alt={calendarImageAlt} className="w-full h-full object-contain filter drop-shadow-sm scale-110" />
+                                  </motion.div>
+                                </AnimatePresence>
+                              ) : (<Coffee size={26} className="text-text-muted" strokeWidth={1.8} />)}
+                            </div>
+                          ) : (<span className="relative z-10">{day}</span>)}
+                          {firstRecord && isSelected && (<div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full border-2 border-bg-app"></div>)}
+                        </button>
+                      );
+                    })}
                   </motion.div>
                 </AnimatePresence>
               </div>
-              
-             {/* 👉 修改：增加外层 gap，并加入搜索按钮 */}
-              <div className="flex items-center gap-3 mt-1">
-                <button 
-                  onClick={() => setShowHistoryModal(true)} 
-                  className="w-8 h-8 rounded-full bg-bg-card border border-border-main/50 flex items-center justify-center text-text-muted hover:text-text-main transition-colors shadow-sm active:scale-95"
-                >
-                  <Search size={15} strokeWidth={2.5} />
-                </button>
-                
-                <div className="flex items-center bg-bg-input/40 rounded-full py-1.5 px-1 shadow-sm border border-border-main/50 text-text-muted hover:bg-bg-input/80 transition-colors">
-                  <button onClick={handlePrevMonth} className="p-1 px-1.5 hover:text-text-main rounded-full transition-colors active:scale-95">
-                    <ChevronLeft size={16} strokeWidth={2.5} />
-                  </button>
-                  <div className="px-2 text-xs font-semibold tracking-wide min-w-[70px] text-center text-text-main whitespace-nowrap">
-                    {currentYear}年{currentMonth + 1}月
-                  </div>
-                  <button onClick={handleNextMonth} className="p-1 px-1.5 hover:text-text-main rounded-full transition-colors active:scale-95">
-                    <ChevronRight size={16} strokeWidth={2.5} />
-                  </button>
-                </div>
-              </div>
-            </div>
 
-            {/* Calendar Card */}
-            <div className="bg-bg-card rounded-[32px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6 overflow-hidden">
-              <div className="grid grid-cols-7 gap-x-2 mb-3">
-                {weekDays.map(d => (
-                  <div key={d} className="text-center text-[11px] text-text-muted font-medium">{d}</div>
-                ))}
-              </div>
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div 
-                  key={`${currentYear}-${currentMonth}`}
-                  initial={{ x: monthDirection * 30, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -monthDirection * 30, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  className="grid grid-cols-7 gap-y-3 gap-x-2"
-                >
-                  {blanks.map(b => (
-                    <div key={`blank-${b}`} className="aspect-square"></div>
-                  ))}
-                  
-                  {days.map(day => {
-                  const teaRecordsForDay = currentMonthRecords.filter(r => r.day === day);
-                  const firstRecord = teaRecordsForDay[0];
-                  const isSelected = selectedDay === day;
-                  const brandCounts = teaRecordsForDay.reduce((acc, record) => {
-                    const key = getBrandKey(record.brand || "");
-                    if (!key) return acc;
-                    acc[key] = (acc[key] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>);
-                  const sortedBrandKeys = Object.entries(brandCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([key]) => key);
-                  const brandLogos = sortedBrandKeys
-                    .map(key => getBrandLogoFile(key))
-                    .filter((logo): logo is string => Boolean(logo));
-                  const activeLogoIndex = brandLogos.length > 1
-                    ? calendarLogoTick % brandLogos.length
-                    : 0;
-                  const activeLogo = brandLogos.length > 0
-                    ? brandLogos[activeLogoIndex]
-                    : null;
-                  const activeLogoAlt = sortedBrandKeys.length > 0
-                    ? sortedBrandKeys[activeLogoIndex]
-                    : "brand";
-                  const rotatedRecordIndex = teaRecordsForDay.length > 1
-                    ? calendarLogoTick % teaRecordsForDay.length
-                    : 0;
-                  const rotatedRecord = teaRecordsForDay.length > 0
-                    ? teaRecordsForDay[rotatedRecordIndex]
-                    : firstRecord;
-                  const uploadedImageSource = rotatedRecord?.imageUrl || firstRecord?.imageUrl || "";
-                  const uploadedImage = isExportableImageSrc(uploadedImageSource) ? uploadedImageSource : "";
-                  const shouldShowBrandLogo = calendarImageMode === 'brand' && Boolean(activeLogo);
-                  const calendarImageSrc = shouldShowBrandLogo
-                    ? `/logos/${activeLogo}`
-                    : uploadedImage.length > 4
-                      ? uploadedImage
-                      : null;
-                  const calendarImageAlt = shouldShowBrandLogo ? activeLogoAlt : "drink";
-                  const shouldAnimateCalendarImage = shouldShowBrandLogo
-                    ? brandLogos.length > 1
-                    : teaRecordsForDay.length > 1;
-                  const calendarImageKey = shouldAnimateCalendarImage
-                    ? `${day}-${calendarImageSrc}-${calendarLogoTick}`
-                    : `${day}-${calendarImageSrc}`;
-                   
-                  return (
-                    <button 
-                      key={`day-${day}`}
-                      onClick={() => {
-                        setSelectedDay(day);
-                      }}
-                      className={`aspect-square flex items-center justify-center rounded-[14px] text-sm font-medium relative overflow-hidden transition-colors ${
-                        isSelected 
-                          ? 'bg-[#8E7558] text-white shadow-md ring-2 ring-[#8E7558]' 
-                          : (!firstRecord ? 'bg-bg-input text-text-main hover:bg-border-main' : 'bg-border-main')
-                      }`}
-                    >
-                      {firstRecord ? (
-                        <div className="absolute inset-0 flex items-center justify-center p-1">
-                          {calendarImageSrc ? (
-                            <AnimatePresence mode="wait" initial={false}>
-                              <motion.div
-                                key={calendarImageKey}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.25, ease: "easeInOut" }}
-                                className="w-full h-full"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={calendarImageSrc} alt={calendarImageAlt} className="w-full h-full object-contain filter drop-shadow-sm scale-110" />
-                              </motion.div>
-                            </AnimatePresence>
-                          ) : (
-                            <Coffee size={26} className="text-text-muted" strokeWidth={1.8} />
-                          )}
-                        </div>
-                      ) : (
-                        <span className="relative z-10">{day}</span>
-                      )}
-                      {firstRecord && isSelected && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full border-2 border-bg-app"></div>
-                      )}
-                    </button>
-                  );
-                })}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+              {/* Add Button */}
+              {/* 优化 6：放弃过于粗大的 py-4，使用 iOS 规范里顶级按钮的标准高度 h-[52px]，加深渐变色提升品质感 */}
+              <button onClick={openAddModal} className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white h-[52px] rounded-full text-[16px] font-bold shadow-[0_6px_16px_rgba(142,117,88,0.25)] flex justify-center items-center gap-2 active:scale-95 transition-transform">
+                <Plus size={20} strokeWidth={3} />
+                添加一杯
+              </button>
+            </div> {/* 👆 上半部（日历区域）到此完美闭合 */}
 
-            {/* Add Button */}
-            <button 
-              onClick={openAddModal}
-              className="w-full bg-[#8E7558] text-white py-4 rounded-full text-lg font-bold shadow-[0_8px_16px_rgba(142,117,88,0.2)] flex justify-center items-center gap-2 active:scale-95 transition-transform"
-            >
-              <Plus size={20} strokeWidth={3} />
-              添加一杯
-            </button>
-
-            {/* Today's Drinks List */}
-            <div className="mt-8 mb-4">
+            {/* 📜 核心重构 3：下半区 (奶茶列表) 被赋予了独立的滚动条！ */}
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-4 pb-36 custom-scrollbar relative">
               <h2 className="text-xl font-bold mb-4 flex items-center justify-between">
                 <span>{`${currentMonth + 1}月奶茶`}</span>
                 <span className="text-sm font-medium text-text-muted">{visibleRecords.length} 杯</span>
@@ -1242,13 +1283,16 @@ const handleSaveDrink = () => {
                     const showDateHeader = index === 0 || visibleRecords[index - 1].day !== record.day;
                     return (
                       // 如果不显示日期标题，我们可以稍微减少一点同一天卡片之间的间距（比如去掉 margin-top）让它们看起来更像一组
-                      <div key={record.id} className={`space-y-2 ${showDateHeader ? 'mt-2' : '-mt-1'}`}>
-      {/* 只有 showDateHeader 为 true 时，才渲染这个日期标签 */}
-      {showDateHeader && (
-        <div className="text-lg font-black tracking-tight text-text-main ml-1 mt-2">
-          {recordDateString}
-        </div>
-      )}
+             <div key={record.id} className={`space-y-2 ${showDateHeader ? 'mt-2' : '-mt-1'}`}>
+                      {showDateHeader && (
+                        <div 
+                          id={`record-date-${record.day}`} 
+                          // 👇 删除了之前为了防遮挡写的 scroll-mt-[420px]，恢复正常间距
+                          className="text-lg font-black tracking-tight text-text-main ml-1 mt-4 mb-2"
+                        >
+                          {recordDateString}
+                        </div>
+                      )}
       
       <div className="relative overflow-hidden rounded-[24px]">
                           {/* Background Actions */}
@@ -1362,19 +1406,19 @@ const handleSaveDrink = () => {
 
             {/* Time Toggle */}
             <div className="flex gap-2 mb-6">
-              <button 
+              <button
                 onClick={() => { setStatPeriod('week'); setStatAnimationKey(prev => prev + 1); }} 
                 className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'week' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
                 {prefLanguage === 'English' ? 'W' : '周'}
               </button>
-              <button 
+              <button
                 onClick={() => { setStatPeriod('month'); setStatAnimationKey(prev => prev + 1); }} 
                 className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'month' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
                 {prefLanguage === 'English' ? 'M' : '月'}
               </button>
-              <button 
+              <button
                 onClick={() => { setStatPeriod('year'); setStatAnimationKey(prev => prev + 1); }} 
                 className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'year' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
@@ -1384,14 +1428,14 @@ const handleSaveDrink = () => {
               
               {/* 👇 新增：生成炫酷海报的按钮 */}
               {statCups > 0 && (
-                <button 
+                <button
                   onClick={() => setShowPosterModal(true)}
                   className="px-3 h-9 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shadow-md hover:opacity-90 active:scale-95 transition-all"
                 >
                   {prefLanguage === 'English' ? '✨ Wrapped' : '✨ 回忆'}
                 </button>
               )}
-              <button 
+              <button
                 onClick={() => {
                   setShowReceiptModal(true);
                 }}
@@ -1402,40 +1446,49 @@ const handleSaveDrink = () => {
               </button>
             </div>
 
-            {/* Visual Shelf */}
+ {/* Visual Shelf */}
             {(() => {
-              // 1. 动态计算贴纸缩放比例
+              // 1. 动态计算贴纸缩放比例 (完全保留原始设定)
               let stickerScale = 1;
               const count = statRecords.length;
-              if (count > 80) stickerScale = 0.25;      // 超过80杯：超级迷你
-              else if (count > 40) stickerScale = 0.35; // 40-80杯：极小
-              else if (count > 20) stickerScale = 0.5;  // 20-40杯：半等比
-              else if (count > 10) stickerScale = 0.7;  // 10-20杯：微缩
-              else if (count > 5) stickerScale = 0.85;  // 5-10杯：稍小
+              if (count > 80) stickerScale = 0.28      // 超过80杯：超级迷你
+              else if (count > 40) stickerScale = 0.4; // 40-80杯：极小
+              else if (count > 20) stickerScale = 0.45;  // 20-40杯：半等比
+              else if (count > 10) stickerScale = 0.65;  // 10-20杯：微缩
+              else if (count > 5) stickerScale = 0.8;  // 5-10杯：稍小
 
               // 2. 基础尺寸 (约等于原本的 w-16 h-20)
-              const baseWidth = 64;  
-              const baseHeight = 80; 
-              const baseOverlap = -24; // 基础的相互重叠量
+              const baseWidth = 64;
+              const baseHeight = 80;
+              const baseOverlap = -10; // 基础的相互重叠量 (保留原始粘连感)
 
               return (
                 <div className="bg-bg-card rounded-[32px] h-64 w-full relative mb-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-border-main overflow-hidden flex items-end justify-center pb-2 px-4">
                   {/* 放宽容器限制，让贴纸更容易堆叠 */}
                   <div className="flex flex-wrap-reverse justify-center max-w-[95%]">
-                    {statRecords.map((r, i) => (
+                    {statRecords.map((r, i) => {
+                      // 🚀 核心性能优化 1/2：当杯数极大时，开启 CPU 降级保护
+                      const isMassive = count > 40;
+
+                      return (
                       <motion.div 
                         initial={{ y: -100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
-                        // 🌟 动态掉落延迟：杯数越多，掉落间隔越短，保证 100 杯也能在 1.5 秒内全部掉完！
-                        transition={{ delay: i * Math.min(0.05, 1.5 / Math.max(count, 1)), type: 'spring', bounce: 0.5 }}
-                        key={`${r.id}-${statAnimationKey}`} 
-                        // 🌟 增加 hover:z-50，这样鼠标/手指按住小贴纸时，它会从一堆贴纸中浮现到最上层并放大
-                        className="transform hover:!scale-125 hover:z-50 transition-all cursor-pointer relative"
+                        // 🚀 核心性能优化 2/2：数量少时保留 Q 弹的 spring；数量大时降级为不占 CPU 的 tween 平滑过渡
+                        transition={{ 
+                           delay: isMassive ? Math.random() * 0.3 : i * Math.min(0.05, 0.95 / Math.max(count, 1)), 
+                           type: isMassive ? 'tween' : 'spring', 
+                           duration: isMassive ? 0.3 : undefined,
+                           bounce: isMassive ? 0 : 0.5 
+                        }}
+                        key={`${r.id}-${statAnimationKey}`}
+                        // 🌟 增加 hover:z-50 放大浮现效果，并加上 will-change-transform 开启 GPU 硬件加速
+                        className="transform hover:!scale-125 hover:z-50 transition-all cursor-pointer relative will-change-transform"
                         style={{ 
                           width: `${baseWidth * stickerScale}px`,
                           height: `${baseHeight * stickerScale}px`,
-                          marginLeft: i === 0 ? '0px' : `${baseOverlap * stickerScale}px`,
-                          rotate: `${(i % 3 === 0 ? -1 : 1) * (i * 2)}deg`,
+                          marginLeft: i === 0 ? '0px' : `${baseOverlap * stickerScale}px`, // 完全保留原始边距
+                          rotate: `${(i % 3 === 0 ? -1 : 1) * ((i % 10) * 2)}deg`, // 完全保留原始旋转
                           zIndex: i
                         }}
                       >
@@ -1445,6 +1498,7 @@ const handleSaveDrink = () => {
                             src={r.imageUrl} 
                             alt="drink" 
                             className="w-full h-full object-contain" 
+                            // 🌟 完全保留原始的 5 层重叠厚实白边滤镜
                             style={{ filter: "drop-shadow(2px 2px 0 white) drop-shadow(-2px -2px 0 white) drop-shadow(2px -2px 0 white) drop-shadow(-2px 2px 0 white) drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }}
                           />
                         ) : (
@@ -1457,7 +1511,7 @@ const handleSaveDrink = () => {
                           </div>
                         )}
                       </motion.div>
-                    ))}
+                    )})}
                   </div>
                   
                   {statRecords.length === 0 && (
@@ -1468,10 +1522,144 @@ const handleSaveDrink = () => {
                 </div>
               );
             })()}
+{/* 🌟 方案B：年度专属奶茶热力图 (GitHub Style) */}
+            {statPeriod === 'year' && (() => {
+              // 1. 数据聚合：计算今年每一天的杯数
+              const yearRecordsMap = new Map();
+              statRecords.forEach(r => {
+                  const dateStr = `${r.year}-${r.month}-${r.day}`;
+                  yearRecordsMap.set(dateStr, (yearRecordsMap.get(dateStr) || 0) + 1);
+              });
+
+              const startDate = new Date(currentYear, 0, 1);
+              const endDate = new Date(currentYear, 11, 31);
+              const heatmapDays = [];
+              
+              // 2. 对齐星期：填充年初的空白格子，确保排版正确
+              let startDayOfWeek = startDate.getDay();
+              if (weekStart === 'monday') {
+                  startDayOfWeek = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
+              }
+              for(let i = 0; i < startDayOfWeek; i++) {
+                  heatmapDays.push(null); 
+              }
+
+              let maxStreak = 0;
+              let currentStreak = 0;
+
+              // 3. 生成 365 天的数据集
+              for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                  const m = d.getMonth();
+                  const day = d.getDate();
+                  const dateStr = `${currentYear}-${m}-${day}`;
+                  const count = yearRecordsMap.get(dateStr) || 0;
+                  
+                  heatmapDays.push({ month: m, day: day, count, dateStr });
+
+                  // 计算高热预警 (连续多少天有喝奶茶)
+                  if (count > 0) {
+                      currentStreak++;
+                      if (currentStreak > maxStreak) maxStreak = currentStreak;
+                  } else {
+                      currentStreak = 0;
+                  }
+              }
+
+              // 4. 计算月份坐标轴
+              const monthLabels: {month: number, col: number}[] = [];
+              let colIndex = 0;
+              heatmapDays.forEach((item, index) => {
+                  if (index % 7 === 0) colIndex++;
+                  if (item && item.day === 1) monthLabels.push({ month: item.month + 1, col: colIndex });
+              });
+
+              return (
+                  <div className="bg-bg-card rounded-[24px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4 w-full">
+                      {/* 标题栏与彩蛋 */}
+                      <div className="flex justify-between items-center mb-3">
+                          <div>
+                              <span className="text-base text-text-main font-bold block">{currentYear} 年度热力图</span>
+                              <span className="text-[11px] text-text-muted font-medium">一眼看穿你的糖分摄入密度</span>
+                          </div>
+                          {maxStreak >= 5 && (
+                              <div 
+                                 onClick={() => {
+                                     triggerHaptic('medium');
+                                     showToast(`经检测，今年你曾连续 ${maxStreak} 天重度堕落，当时是发财了吗？`, 'info');
+                                 }}
+                                 className="flex items-center gap-1 bg-orange-500/10 text-orange-600 px-2 py-1 rounded-full text-[10px] font-bold cursor-pointer hover:bg-orange-500/20 active:scale-95 transition-all"
+                              >
+                                  <Flame size={12} className="fill-orange-500"/>
+                                  高热预警
+                              </div>
+                          )}
+                      </div>
+
+                      {/* 滑动矩阵区 */}
+                      <div className="w-full overflow-x-auto custom-scrollbar pb-3 pt-1 -mx-2 px-2">
+                          {/* 月份坐标轴 */}
+                          <div className="flex text-[9px] text-text-muted font-bold mb-1.5 relative h-3" style={{ width: `${Math.ceil(heatmapDays.length / 7) * 14}px` }}>
+                              {monthLabels.map((lbl, i) => (
+                                  <div key={i} className="absolute top-0 transform -translate-x-1" style={{ left: `${(lbl.col - 1) * 14}px` }}>
+                                      {lbl.month}月
+                                  </div>
+                              ))}
+                          </div>
+
+                          {/* GitHub 风格格子矩阵 */}
+                          <div className="grid grid-rows-7 grid-flow-col gap-[4px] min-w-max">
+                              {heatmapDays.map((item, index) => {
+                                  if (!item) return <div key={`empty-${index}`} className="w-[10px] h-[10px] rounded-[2px]"></div>;
+                                  
+                                // 🚨 亮眼色阶计算：高能预警配色
+                                  let bgColor = 'bg-bg-input/50'; // 0杯：原本的浅灰色（健康）
+                                  let shadowClass = ''; // 给致死量加个小发光特效
+
+                                  if (item.count === 1) {
+                                      bgColor = 'bg-amber-400'; // 1杯：亮琥珀色 (醒目)
+                                  } else if (item.count === 2) {
+                                      bgColor = 'bg-orange-500'; // 2杯：活力亮橙 (警告)
+                                  } else if (item.count >= 3) {
+                                      bgColor = 'bg-red-500'; // 3杯+：刺眼猩红 (致死量)
+                                      shadowClass = 'shadow-[0_0_8px_rgba(239,68,68,0.6)] z-10 relative'; // 致死量格子自带红色发光
+                                  }
+
+                                  return (
+                                      <div 
+                                          key={item.dateStr} 
+                                          onClick={() => {
+                                              triggerHaptic('light');
+                                              if (item.count === 0) {
+                                                  showToast(`${item.month + 1}月${item.day}日 · 胰岛很安全，0 杯`, 'info');
+                                              } else {
+                                                  showToast(`${item.month + 1}月${item.day}日 · 喝了 ${item.count} 杯，血液纯度已降至糖点。`, 'info');
+                                              }
+                                          }}
+                                          // 移除了 opacity，直接使用高饱和颜色，并加上阴影特效
+                                          className={`w-[10px] h-[10px] rounded-[2px] cursor-pointer hover:ring-2 ring-border-main hover:scale-125 transition-all duration-200 ${bgColor} ${shadowClass}`}
+                                      ></div>
+                                  );
+                              })}
+                          </div>
+                      </div>
+
+                      {/* 👇 底部图例也要同步更换颜色 */}
+                      <div className="flex items-center justify-end gap-1.5 mt-2 text-[9px] text-text-muted font-bold">
+                          <span>健康</span>
+                          <div className="w-2.5 h-2.5 rounded-[2px] bg-bg-input/50"></div>
+                          <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-400"></div>
+                          <div className="w-2.5 h-2.5 rounded-[2px] bg-orange-500"></div>
+                          <div className="w-2.5 h-2.5 rounded-[2px] bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.5)]"></div>
+                          <span className="text-red-500">致“死”量</span>
+                      </div>
+                  </div>
+              );
+            })()}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-bg-card rounded-[24px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+                
                 <div>
                   <span className="text-xs text-text-muted font-medium block mb-2">总杯数</span>
                   <div className={`text-4xl font-black font-mono tracking-tight ${currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? 'text-red-500' : ''}`} style={currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? {} : { color: themeAccent }}>{statCups}</div>
@@ -1573,27 +1761,27 @@ const handleSaveDrink = () => {
             </h1>
           {/* 👇 终极视觉优化：至尊荣誉大奖牌入口 */}
             {(() => {
-                // 🧠 统一核心成就判断引擎 (入口和弹窗保持绝对一致)
+                // 🧠 统一核心成就判断引擎
                 const unlocked = new Set<string>();
                 if (records.length >= 1) unlocked.add('first_blood'); 
-                if (records.length >= 200) unlocked.add('fifty_cups'); // 奶茶土匪：200杯
+                if (records.length >= 200) unlocked.add('fifty_cups'); 
                 
                 const brands = new Set(records.map(r => r.brand).filter(Boolean));
-                if (brands.size >= 15) unlocked.add('five_brands'); // 海王：15个品牌
+                if (brands.size >= 15) unlocked.add('five_brands'); 
                 
                 const noSugarCount = records.filter(r => r.sweetness === '不另外加糖').length;
-                if (noSugarCount >= 50) unlocked.add('no_sugar'); // 苦行僧：50杯无糖
+                if (noSugarCount >= 50) unlocked.add('no_sugar'); 
                 
-                if (records.some(r => r.cost >= 15)) unlocked.add('rich_guy'); // 破产：单杯>15元
-                
-                // 👉 修复：按真实的喝奶茶日期从新到老排（逆序），解决补录数据导致的顺序错乱
+                if (records.some(r => r.cost >= 15)) unlocked.add('rich_guy'); 
+
+                // 👉 修正排序与连续天数逻辑，删除重复定义
                 let loyal = false;
                 let currentConsecutive = 1;
                 const sorted = [...records].sort((a, b) => {
                     if (b.year !== a.year) return b.year - a.year;
                     if (b.month !== a.month) return b.month - a.month;
                     if (b.day !== a.day) return b.day - a.day;
-                    return parseInt(b.id) - parseInt(a.id); // 同一天的，晚录入的算新
+                    return parseInt(b.id) - parseInt(a.id);
                 });
                 
                 for(let i=0; i<sorted.length - 1; i++) {
@@ -1601,16 +1789,16 @@ const handleSaveDrink = () => {
                        currentConsecutive++;
                        if (currentConsecutive >= 20) { loyal = true; break; }
                    } else {
-                       currentConsecutive = 1; // 品牌中断，重新计数
+                       currentConsecutive = 1;
                    }
                 }
                 if (loyal) unlocked.add('loyalist');
 
                 const iceCount = records.filter(r => r.temperature?.includes('冰')).length;
-                if (iceCount >= 100) unlocked.add('ice_king'); // 绝对零度：100杯冷饮
+                if (iceCount >= 100) unlocked.add('ice_king'); 
                 
                 const hotCount = records.filter(r => r.temperature?.includes('热')).length;
-                if (hotCount >= 100) unlocked.add('hot_king'); // 养生达人：100杯热饮
+                if (hotCount >= 100) unlocked.add('hot_king'); 
 
                 const totalCount = 8; 
                 const unlockedCount = unlocked.size;
@@ -1670,7 +1858,7 @@ const handleSaveDrink = () => {
               {settingMatches(['dark mode', '深色模式']) && <div className="p-4 font-medium flex justify-between items-center"><span className="text-text-main">{prefLanguage === 'English' ? 'Dark Mode' : '深色模式'}</span><button onClick={() => setIsDark(!isDark)} className={`w-12 h-6 rounded-full transition-colors relative ${isDark ? '' : 'bg-border-main'}`} style={isDark ? { backgroundColor: themeAccent } : undefined}><div className={`w-5 h-5 bg-bg-card rounded-full absolute top-[2px] transition-transform ${isDark ? 'translate-x-[26px]' : 'translate-x-[2px]'}`}></div></button></div>}
               {settingMatches(['theme','主题色']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Theme Accent' : '主题色'}</span><div className="flex gap-2">{['#8E7558','#1D7AFC','#0D9F6E','#D9487D','#F59E0B'].map(c => <button key={c} onClick={() => setThemeAccent(c)} className={`w-7 h-7 rounded-full border-2 ${themeAccent === c ? 'border-text-main' : 'border-transparent'}`} style={{backgroundColor:c}} />)}</div></div>}
               {settingMatches(['calendar image', 'calendar display', '日历图片', '品牌logo', '奶茶贴纸']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Calendar Image' : '日历图片'}</span><div className="flex gap-2">{([{ key: 'brand', label: prefLanguage === 'English' ? 'Brand Logo' : '品牌Logo' },{ key: 'upload', label: prefLanguage === 'English' ? 'Uploaded Photo' : '奶茶贴纸' }] as const).map(item => <button key={item.key} onClick={() => setCalendarImageMode(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${calendarImageMode === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={calendarImageMode === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
-              {settingMatches(['font','字号']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Font Size' : '字号'}</span><div className="flex gap-2">{([{ key: 'small', label: prefLanguage === 'English' ? 'Small' : '小' },{ key: 'medium', label: prefLanguage === 'English' ? 'Medium' : '中' },{ key: 'large', label: prefLanguage === 'English' ? 'Large' : '大' }] as const).map(item => <button key={item.key} onClick={() => setFontScale(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${fontScale === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={fontScale === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
+              {settingMatches(['font','字体大小']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Font Size' : '字体大小'}</span><div className="flex gap-2">{([{ key: 'small', label: prefLanguage === 'English' ? 'Small' : '小' },{ key: 'medium', label: prefLanguage === 'English' ? 'Medium' : '中' },{ key: 'large', label: prefLanguage === 'English' ? 'Large' : '大' }] as const).map(item => <button key={item.key} onClick={() => setFontScale(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${fontScale === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={fontScale === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
               {settingMatches(['density','卡片密度']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Card Density' : '卡片密度'}</span><div className="flex gap-2">{([{ key: 'compact', label: prefLanguage === 'English' ? 'Compact' : '紧凑' },{ key: 'comfortable', label: prefLanguage === 'English' ? 'Comfortable' : '舒适' }] as const).map(item => <button key={item.key} onClick={() => setCardDensity(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${cardDensity === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={cardDensity === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
               {settingMatches(['week start', '起始日', '星期']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Start of Week' : '日历起始日'}</span><div className="flex gap-2">{([{ key: 'sunday', label: prefLanguage === 'English' ? 'Sunday (周日)' : '周日' },{ key: 'monday', label: prefLanguage === 'English' ? 'Monday (周一)' : '周一' }] as const).map(item => <button key={item.key} onClick={() => setWeekStart(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${weekStart === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={weekStart === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
               {/* 👉 目标与自律模式 */}
@@ -1761,150 +1949,176 @@ const handleSaveDrink = () => {
         )}
       </div>
 
-      {/* Add Drink Modal */}
+{/* Add Drink Modal */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center sm:justify-center p-0 sm:p-4"
+            // 加上 backdrop-blur-sm 让背景有高级的毛玻璃虚化效果
+            className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4 backdrop-blur-sm"
           >
             <motion.div 
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="w-full bg-bg-card rounded-t-[32px] sm:rounded-[32px] p-6 pb-12 sm:pb-6 shadow-2xl relative sm:max-w-[400px]"
+              // 🌟 核心重构 1：改为 flex 纵向布局，严格限制最大高度为 92vh，防止内部元素乱跑顶穿屏幕
+              className="w-full bg-bg-card rounded-t-[32px] sm:rounded-[32px] shadow-2xl relative sm:max-w-[400px] max-h-[92vh] flex flex-col overflow-hidden"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">{editingRecordId ? '编辑奶茶' : '记录新奶茶'}</h2>
-                <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-bg-input text-text-muted hover:text-text-main transition-colors" aria-label="关闭">
-                  <X size={18} strokeWidth={2.5} />
+              {/* 🌟 核心重构 2：独立吸顶 Header (带优雅的拖拽指示条) */}
+              <div className="flex flex-col items-center pt-3 pb-4 px-6 bg-bg-card z-20 shrink-0 border-b border-border-main/40 shadow-[0_4px_15px_rgba(0,0,0,0.02)]">
+                <div className="w-12 h-1.5 bg-border-main rounded-full mb-4"></div>
+                <div className="flex justify-between items-center w-full">
+                  <h2 className="text-[20px] font-black text-text-main tracking-tight">{editingRecordId ? '编辑奶茶' : '记录新奶茶'}</h2>
+                  <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-bg-input text-text-muted hover:text-text-main transition-colors active:scale-95" aria-label="关闭">
+                    <X size={18} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 🌟 核心重构 3：独立滚动内容区 (只有这里面可以上下滑) */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6 space-y-6 bg-bg-app/30">
+                
+                {/* Image Picker */}
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-24 h-24 mx-auto bg-bg-input rounded-[22px] flex items-center justify-center cursor-pointer relative overflow-hidden shrink-0 shadow-inner group ring-4 ring-bg-app"
+                >
+                  <>
+                    {isExportableImageSrc(draftImage) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={draftImage} alt="preview" className="w-full h-full object-contain filter drop-shadow-md scale-110" />
+                    ) : (
+                      <div className="flex flex-col items-center text-text-muted gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <Coffee size={32} strokeWidth={1.8} />
+                        <span className="text-[11px] font-bold tracking-widest">传照片</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold">更换</span>
+                    </div>
+                  </>
+                </div>
+
+                {/* Form: 增强了字重，加大了输入框的高度，增加了英文副标题提升排版质感 */}
+                <div className="space-y-4">
+                  {/* 日期 */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1.5 ml-1 tracking-widest uppercase">日期 / Date</label>
+                    <input
+                      type="date"
+                      value={draftDate}
+                      onChange={e => setDraftDate(e.target.value)}
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main shadow-sm border border-border-main/50"
+                    />
+                  </div>
+                  
+                  {/* 品牌 */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1.5 ml-1 tracking-widest uppercase">品牌 / Brand</label>
+                    <input
+                      type="text"
+                      value={draftBrand}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const matchedBrand = getBrandKey(val);
+                        setDraftBrand(matchedBrand || val);
+                      }}
+                      placeholder="例如：霸王茶姬"
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
+                    />
+                  </div>
+                  
+                  {/* 饮品名称 */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1.5 ml-1 tracking-widest uppercase">名称 / Name</label>
+                    <input
+                      type="text"
+                      value={draftName}
+                      onChange={e => setDraftName(e.target.value)}
+                      placeholder="例如：伯牙绝弦"
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
+                    />
+                  </div>
+                  
+                  {/* 价格 */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1.5 ml-1 tracking-widest uppercase">价格 / Price</label>
+                    <div className="relative flex items-center shadow-sm rounded-2xl border border-border-main/50 bg-bg-card">
+                      <span className="absolute left-4 text-text-muted font-black text-lg">￥</span>
+                      <input
+                        type="number"
+                        value={draftCost}
+                        onChange={e => setDraftCost(e.target.value)}
+                        placeholder="20"
+                        className="w-full bg-transparent rounded-2xl pl-10 pr-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Size, Temperature and Sweetness options */}
+                  <div className="pt-4 mt-2 border-t border-border-main/60 space-y-5">
+                    {/* 杯形 */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-text-muted mb-2 ml-1 tracking-widest uppercase">杯型 / Size</label>
+                      <div className="flex flex-wrap gap-2.5">
+                        {['中杯', '大杯', '超大杯'].map(size => (
+                          <button
+                            key={size}
+                            onClick={() => setDraftSize(size)}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSize === size ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 温度 */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-text-muted mb-2 ml-1 tracking-widest uppercase">温度 / Temp</label>
+                      <div className="flex flex-wrap gap-2.5">
+                        {['热', '正常冰', '少冰', '去冰'].map(temp => (
+                          <button
+                            key={temp}
+                            onClick={() => setDraftTemperature(temp)}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftTemperature === temp ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                          >
+                            {temp}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 甜度 */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-text-muted mb-2 ml-1 tracking-widest uppercase">甜度 / Sweet</label>
+                      <div className="flex flex-wrap gap-2.5">
+                        {getSweetnessOptions(draftBrand).map(sweet => (
+                          <button 
+                            key={sweet}
+                            onClick={() => setDraftSweetness(sweet)}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSweetness === sweet ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                          >
+                            {sweet}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🌟 核心重构 4：独立固定的底部按钮区 (永远悬浮，绝不被切) */}
+              <div className="p-5 pt-4 bg-bg-card border-t border-border-main/40 shrink-0 z-20">
+                <button 
+                  onClick={handleSaveDrink}
+                  className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white py-4 rounded-full text-[16px] font-bold shadow-[0_8px_20px_rgba(142,117,88,0.25)] active:scale-95 transition-transform flex justify-center items-center gap-2"
+                >
+                  <span>保存记录</span>
                 </button>
               </div>
 
-              {/* Image Picker */}
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-32 h-32 mx-auto bg-bg-input rounded-3xl mb-8 flex items-center justify-center cursor-pointer relative overflow-hidden"
-              >
-                <>
-                  {isExportableImageSrc(draftImage) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={draftImage} alt="preview" className="w-full h-full object-contain filter drop-shadow-md scale-110" />
-                  ) : (
-                    <Coffee size={56} className="text-text-muted" strokeWidth={1.8} />
-                  )}
-                  <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">更换照片</span>
-                  </div>
-                </>
-              </div>
-
-              {/* Form */}
-              <div className="space-y-4 mb-8">
-                {/* 👉 新增的日期选择器 */}
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1 ml-1">日期</label>
-                  <input
-                    type="date"
-                    value={draftDate}
-                    onChange={e => setDraftDate(e.target.value)}
-                    className="w-full bg-bg-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1 ml-1">品牌</label>
-                  <input
-                  type="text"
-                  value={draftBrand}
-                  onChange={e => {
-                    const val = e.target.value;// 去字典里查一下有没有对应的标准品牌名
-                    const matchedBrand = getBrandKey(val);// 如果查到了（比如输入了 mxbc 查到了 蜜雪冰城），就用标准名，否则保留用户的输入
-                    setDraftBrand(matchedBrand || val);
-                  }}
-                  placeholder="例如：霸王茶姬"
-                  className="w-full bg-bg-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1 ml-1">饮品名称</label>
-                  <input
-                    type="text"
-                    value={draftName}
-                    onChange={e => setDraftName(e.target.value)}
-                    placeholder="例如：伯牙绝弦"
-                    className="w-full bg-bg-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1 ml-1">价格</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-medium">￥</span>
-                    <input
-                      type="number"
-                      value={draftCost}
-                      onChange={e => setDraftCost(e.target.value)}
-                      placeholder="20"
-                      className="w-full bg-bg-input rounded-xl pl-8 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all font-medium"
-                    />
-                  </div>
-                </div>
-                
-                {/* Size, Temperature and Sweetness options */}
-                <div className="pt-2 border-t border-border-main/50">
-                  <div className="mb-4">
-                    <label className="block text-xs font-medium text-text-muted mb-2 ml-1">杯形</label>
-                    <div className="flex flex-wrap gap-2">
-                      {['中杯', '大杯', '超大杯'].map(size => (
-                        <button
-                          key={size}
-                          onClick={() => setDraftSize(size)}
-                          className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all active:scale-95 ${draftSize === size ? 'bg-[#8E7558] text-white shadow-md' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-xs font-medium text-text-muted mb-2 ml-1">温度</label>
-                    <div className="flex flex-wrap gap-2">
-                      {['热', '正常冰', '少冰', '去冰'].map(temp => (
-                        <button
-                          key={temp}
-                          onClick={() => setDraftTemperature(temp)}
-                          className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all active:scale-95 ${draftTemperature === temp ? 'bg-[#8E7558] text-white shadow-md' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
-                        >
-                          {temp}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-text-muted mb-2 ml-1">甜度</label>
-                    <div className="flex flex-wrap gap-2">
-                      {getSweetnessOptions(draftBrand).map(sweet => (
-                        <button 
-                          key={sweet}
-                          onClick={() => setDraftSweetness(sweet)}
-                          className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all active:scale-95 ${draftSweetness === sweet ? 'bg-[#8E7558] text-white shadow-md' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
-                        >
-                          {sweet}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleSaveDrink}
-                className="w-full bg-[#8E7558] text-white py-4 rounded-full text-lg font-bold shadow-[0_8px_16px_rgba(142,117,88,0.2)] disabled:opacity-50 active:scale-95 transition-transform"
-              >
-                保存记录
-              </button>
             </motion.div>
           </motion.div>
         )}
@@ -1924,89 +2138,91 @@ const handleSaveDrink = () => {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
               ref={receiptCardRef}
-              className="bg-[#f8f8f8] w-full max-w-[360px] rounded-t-2xl relative flex flex-col pt-7 pb-4 px-6 text-gray-800 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
+              // 👇 1. 缩小卡片内边距 (pt-7 -> pt-5, px-6 -> px-5)
+              className="bg-[#f8f8f8] w-full max-w-[340px] rounded-t-2xl relative flex flex-col pt-5 pb-3 px-5 text-gray-800 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
             >
-              <div className="flex justify-between items-start relative mb-4">
-                  <div className="font-extrabold text-[48px] tracking-tight leading-[0.95] text-[#102a4a]">
+              <div className="flex justify-between items-start relative mb-3">
+                  {/* 👇 2. 缩小顶部英文标题字号 (48px -> 36px) */}
+                  <div className="font-extrabold text-[36px] tracking-tight leading-[0.95] text-[#102a4a]">
                       {prefLanguage === 'English' ? 'Boba Bill' : '奶茶账单'}<br/>Receipt
                   </div>
-                  <div className="w-20 h-24 mr-1">
+                  {/* 👇 3. 缩小右上角照片/图标尺寸 */}
+                  <div className="w-16 h-20 mr-1">
                       {statRecords.length > 0 && isExportableImageSrc(statRecords[statRecords.length - 1].imageUrl) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={statRecords[statRecords.length - 1].imageUrl} className="w-full h-full object-contain filter drop-shadow-xl" alt="boba" />
                       ) : (
-                          <Coffee size={72} className="text-[#102a4a] mt-2 ml-2 drop-shadow-xl" strokeWidth={1.8} />
+                          <Coffee size={56} className="text-[#102a4a] mt-1 ml-1 drop-shadow-xl" strokeWidth={1.8} />
                       )}
                   </div>
               </div>
               
-              <div className="border-b-2 border-black/80 mb-6 w-full"></div>
+              <div className="border-b-2 border-black/80 mb-4 w-full"></div>
               
-              <div className="mb-6">
-                  <h1 className="text-[52px] font-black tracking-[-0.04em] leading-none mb-1 text-[#102a4a]">
+              <div className="mb-4">
+                  {/* 👇 4. 缩小主标题字号 (52px -> 40px) */}
+                  <h1 className="text-[40px] font-black tracking-[-0.04em] leading-none mb-1 text-[#102a4a]">
                       {statPeriod === 'week' ? (prefLanguage === 'English' ? 'Weekly' : '本周统计') : 
                        statPeriod === 'month' ? (prefLanguage === 'English' ? 'Monthly' : '本月统计') : 
                        (prefLanguage === 'English' ? 'Yearly' : '年度统计')}
                   </h1>
-                  <div className="text-[11px] text-gray-400 font-mono tracking-[0.24em] uppercase">
+                  <div className="text-[10px] text-gray-400 font-mono tracking-[0.24em] uppercase">
                       No.BL{new Date().getTime().toString().slice(-10)}
                   </div>
               </div>
               
-              <div className="border-b border-dashed border-gray-300 mb-5 w-full"></div>
+              <div className="border-b border-dashed border-gray-300 mb-4 w-full"></div>
               
-              {/* 1. 全新网格化指标区 (将6行压缩为3行) */}
-              <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-[13px] font-medium text-gray-800 mb-5">
+              {/* 1. 全新网格化指标区 (压缩间距) */}
+              <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[12px] font-medium text-gray-800 mb-4">
                   <div>
-                      <div className="text-gray-400 tracking-wider text-[10px] mb-0.5">{prefLanguage === 'English' ? 'PERIOD' : '统计周期'}</div>
-                      <div className="font-bold text-[14px]">{statDateLabel}</div>
+                      <div className="text-gray-400 tracking-wider text-[9px] mb-0.5">{prefLanguage === 'English' ? 'PERIOD' : '统计周期'}</div>
+                      <div className="font-bold text-[13px]">{statDateLabel}</div>
                   </div>
                   <div>
-                      <div className="text-gray-400 tracking-wider text-[10px] mb-0.5">{prefLanguage === 'English' ? 'TOTAL CUPS' : '杯数（总）'}</div>
-                      <div className="font-bold text-[14px]">{statCups} {prefLanguage === 'English' ? 'Cups' : '杯'}</div>
+                      <div className="text-gray-400 tracking-wider text-[9px] mb-0.5">{prefLanguage === 'English' ? 'TOTAL CUPS' : '杯数（总）'}</div>
+                      <div className="font-bold text-[13px]">{statCups} {prefLanguage === 'English' ? 'Cups' : '杯'}</div>
                   </div>
                   
                   {statCups > 0 && (
                       <>
                           <div>
-                              <div className="text-gray-400 tracking-wider text-[10px] mb-0.5">{prefLanguage === 'English' ? 'FAV BRAND' : '品牌（最爱）'}</div>
-                              <div className="font-bold text-[14px] truncate pr-2">{receiptTopBrand}</div>
+                              <div className="text-gray-400 tracking-wider text-[9px] mb-0.5">{prefLanguage === 'English' ? 'FAV BRAND' : '品牌（最爱）'}</div>
+                              <div className="font-bold text-[13px] truncate pr-2">{receiptTopBrand}</div>
                           </div>
                           <div>
-                              <div className="text-gray-400 tracking-wider text-[10px] mb-0.5">{prefLanguage === 'English' ? 'PREF SPEC' : '规格（最常点）'}</div>
-                              <div className="font-bold text-[14px] truncate">{receiptTopTemp} · {receiptTopSweet}</div>
+                              <div className="text-gray-400 tracking-wider text-[9px] mb-0.5">{prefLanguage === 'English' ? 'PREF SPEC' : '规格（最常点）'}</div>
+                              <div className="font-bold text-[13px] truncate">{receiptTopTemp} · {receiptTopSweet}</div>
                           </div>
                       </>
                   )}
 
-                  {/* 消费总金额横跨两列，作为视觉锚点 */}
-                  <div className="col-span-2 pt-3 mt-1 border-t border-dashed border-gray-200 flex justify-between items-end">
-                      <span className="text-gray-400 tracking-wider text-xs mb-1.5">{prefLanguage === 'English' ? 'TOTAL COST' : '消费金额'}</span>
-                      <span className="font-black text-[36px] leading-none text-[#102a4a]">￥{parseFloat(statCost.toFixed(2))}</span>
+                  <div className="col-span-2 pt-2 mt-1 border-t border-dashed border-gray-200 flex justify-between items-end">
+                      <span className="text-gray-400 tracking-wider text-[11px] mb-1">{prefLanguage === 'English' ? 'TOTAL COST' : '消费金额'}</span>
+                      {/* 👇 5. 缩小总金额字号 (36px -> 32px) */}
+                      <span className="font-black text-[32px] leading-none text-[#102a4a]">￥{parseFloat(statCost.toFixed(2))}</span>
                   </div>
               </div>
 
-              {/* 2. 紧凑版品牌消费清单 */}
+              {/* 2. 紧凑版品牌消费清单 (压缩行高) */}
               {statCups > 0 && (
-                <div className="mb-4 border-y border-dashed border-gray-300 py-3">
-                  <div className="flex justify-between text-[9px] text-gray-400 font-bold mb-2.5 tracking-widest">
+                <div className="mb-3 border-y border-dashed border-gray-300 py-2">
+                  <div className="flex justify-between text-[9px] text-gray-400 font-bold mb-1.5 tracking-widest">
                     <span>{prefLanguage === 'English' ? 'BRAND / QTY' : '品牌 / 数量'}</span>
                     <span>{prefLanguage === 'English' ? 'AMOUNT' : '金额'}</span>
                   </div>
-                  {/* 缩小列表行距 */}
-                  <div className="space-y-2">{mergedBrandMetrics.map((item, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs font-medium text-gray-800">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[14px] text-[#102a4a]">{item.brand}</span>
-                        <span className="text-[10px] text-gray-500 font-mono">x{item.cups}</span>
+                  <div className="space-y-1.5">{mergedBrandMetrics.map((item, i) => (
+                    <div key={i} className="flex justify-between items-center text-[11px] font-medium text-gray-800">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-[12px] text-[#102a4a]">{item.brand}</span>
+                        <span className="text-[9px] text-gray-500 font-mono">x{item.cups}</span>
                       </div>
-                      <div className="font-black text-[15px] text-[#102a4a]">￥{item.cost.toFixed(1)}</div>
+                      <div className="font-black text-[13px] text-[#102a4a]">￥{item.cost.toFixed(1)}</div>
                     </div>
                   ))}
                   </div>
-                  {/* 去除冗余总计，保留精简的彩蛋 */}
-                  <div className="pt-2.5 mt-2.5 border-t border-dotted border-gray-200">
-                      <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                  <div className="pt-1.5 mt-1.5 border-t border-dotted border-gray-200">
+                      <div className="flex justify-between text-[9px] text-gray-400 font-medium">
                         <span>{prefLanguage === 'English' ? 'Happiness Tax (100%)' : '多巴胺附加税 (100%)'}</span>
                         <span className="italic">Included / 已免除</span>
                       </div>
@@ -2014,22 +2230,22 @@ const handleSaveDrink = () => {
                 </div>
               )}
               
-              {/* 4. 趣味称号区 (新增彩蛋) */}
-              <div className="mt-4 mb-4 flex flex-col items-center justify-center">
-                <div className="text-[9px] text-gray-400 font-bold tracking-widest mb-2">
+              {/* 4. 趣味称号区 */}
+              <div className="mt-2 mb-2 flex flex-col items-center justify-center">
+                <div className="text-[9px] text-gray-400 font-bold tracking-widest mb-1.5">
                   {prefLanguage === 'English' ? 'CURRENT STATUS' : '- 本期饮茶成就 -'}
                 </div>
-                {/* 模拟实体印章效果：粗边框、黑体、微微倾斜 */}
-                <div className="border-[2px] border-[#102a4a] text-[#102a4a] px-4 py-1 font-black text-[13px] tracking-widest uppercase transform -rotate-2 bg-[#f8f8f8] shadow-sm">
+                <div className="border-[2px] border-[#102a4a] text-[#102a4a] px-3 py-0.5 font-black text-[11px] tracking-widest uppercase transform -rotate-2 bg-[#f8f8f8] shadow-sm">
                   {getReceiptTitle(statCups, statPeriod, prefLanguage)}
                 </div>
               </div>
-              <div className="text-center text-[10px] text-gray-300 font-mono mb-3 uppercase mt-1 tracking-[0.22em]">
+              <div className="text-center text-[9px] text-gray-300 font-mono mb-2 uppercase tracking-[0.22em]">
                 {prefLanguage === 'English' ? 'Sugar Time' : 'Sugar Time'}
-                </div>
-                <div className="border-b border-dashed border-gray-300 mb-4 w-full"></div>
-              {/* Barcode Mock 下面的条形码代码保持不变... */}
-              <div className="flex justify-center h-11 opacity-80 mb-1">
+              </div>
+              <div className="border-b border-dashed border-gray-300 mb-2 w-full"></div>
+              
+              {/* 👇 6. 降低底部条形码高度 (h-11 -> h-8) */}
+              <div className="flex justify-center h-8 opacity-80 mb-1">
                    {Array.from({length: 40}).map((_, i) => (
                       <div key={i} className={`h-full bg-black mx-[0.5px] ${i%3===0 ? 'w-1' : i%5===0 ? 'w-1.5' : 'w-[2px]'}`}></div>
                    ))}
@@ -2443,7 +2659,7 @@ const handleSaveDrink = () => {
                  if (i > 0) {
                      if (r.brand && r.brand === chronological[i-1].brand) {
                          loyalCount++;
-                         if (loyalCount === 20 && !unlockedMap.has('loyalist')) unlockedMap.set('loyalist', r);
+                         if (loyalCount === 7 && !unlockedMap.has('loyalist')) unlockedMap.set('loyalist', r);
                      } else {
                          loyalCount = 1; // 中断，重新计算
                      }
@@ -2466,8 +2682,8 @@ const handleSaveDrink = () => {
               const achievementsList = [
                 { id: 'first_blood', icon: '🍼', title: '初次邂逅', desc: '记录你的第一杯饮品', isUnlocked: unlockedMap.has('first_blood'), trigger: unlockedMap.get('first_blood'), 
                   buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，命运的齿轮开始转动。`, comment: `这是你在《老糖人》记录的第一杯奶茶。当时的你一定没想过，这仅仅是一条“不归路”的开始……` }) },
-                { id: 'loyalist', icon: '❤️', title: '品牌死忠', desc: '连续 20 杯喝同一个品牌', isUnlocked: unlockedMap.has('loyalist'), trigger: unlockedMap.get('loyalist'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你达成了最高级别的羁绊。`, comment: `连续 20 杯「${t.brand || '该品牌'}」！你这已经不是爱了，你简直是他们家流落在外的野生代言人。建议拿着这串记录直接去找老板入股。` }) },
+                { id: 'loyalist', icon: '❤️', title: '品牌死忠', desc: '连续 7 杯喝同一个品牌', isUnlocked: unlockedMap.has('loyalist'), trigger: unlockedMap.get('loyalist'), 
+                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你达成了最高级别的羁绊。`, comment: `连续 7 杯「${t.brand || '该品牌'}」！你这已经不是爱了，你简直是他们家流落在外的野生代言人。建议拿着这串记录直接去找老板入股。` }) },
                 { id: 'five_brands', icon: '🌍', title: '海王品鉴', desc: '品尝过 15 个不同的品牌', isUnlocked: unlockedMap.has('five_brands'), trigger: unlockedMap.get('five_brands'), 
                   buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的花心版图再次扩张。`, comment: `在尝遍了 14 个品牌后，最终是这杯「${t.brand || '新品牌'}」帮你补齐了海王拼图。你没有偏爱，你只是心碎成了 15 瓣，每一瓣都爱着不同的快乐水。` }) },
                 { id: 'no_sugar', icon: '🧘', title: '清糖苦行僧', desc: '累计喝过 50 杯不另外加糖', isUnlocked: unlockedMap.has('no_sugar'), trigger: unlockedMap.get('no_sugar'), 
@@ -2838,14 +3054,19 @@ const handleSaveDrink = () => {
         </button>
       </div>
 
+   {/* 👇 将这里的样式替换为“彻底隐藏滚动条”的终极兼容代码 */}
       <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 0px; }
+        /* 隐藏 Chrome, Safari 和 Opera 的滚动条 */
+        .custom-scrollbar::-webkit-scrollbar { 
+          display: none; 
+          width: 0px; 
+        }
+        /* 隐藏 IE, Edge 和 Firefox 的滚动条 */
+        .custom-scrollbar {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+        }
       `}} />
     </div>
   );
 }
-
-
-
-
-
