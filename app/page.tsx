@@ -265,19 +265,83 @@ export default function App() {
   const [settingsSearch, setSettingsSearch] = useState('');
   const [calendarLogoTick, setCalendarLogoTick] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
-  // 👉 1. 新增 Toast 状态和触发函数
+  // 👉 1. 新增 Toast 和 成就横幅 状态
   const [toastMsg, setToastMsg] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [achievementBanner, setAchievementBanner] = useState<string | null>(null); // 🌟 存储刚解锁的成就ID
+
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMsg({ text, type });
-    setTimeout(() => setToastMsg(null), 3000); // 3秒后自动消失
+    setTimeout(() => setToastMsg(null), 3000); 
   };
 
-  // 👇 请插入这部分震动辅助函数 👇
-  const triggerHaptic = (style: 'light' | 'medium' | 'heavy' = 'light') => {
+  // 👇 优化震动：加入 'success' 模式（Xbox/PS级两段式长震动）
+  const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'success' = 'light') => {
     if (typeof window === 'undefined' || !navigator.vibrate) return;
     if (style === 'light') navigator.vibrate(15);
     else if (style === 'medium') navigator.vibrate(30);
-    else navigator.vibrate(50);
+    else if (style === 'heavy') navigator.vibrate(50);
+    // 🌟 Xbox级震动反馈：震动 100ms -> 停顿 60ms -> 重震 200ms，手感极其酥麻解压！
+    else if (style === 'success') navigator.vibrate([100, 60, 200]); 
+  };
+
+  // 🧠 🌟 核心：全局成就计算引擎 (剥离出来供保存和弹窗共享)
+  const getAchievementsData = (currentRecords: DrinkRecord[]) => {
+    const unlockedMap = new Map();
+    const chronological = [...currentRecords].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.month !== b.month) return a.month - b.month;
+        if (a.day !== b.day) return a.day - b.day;
+        return parseInt(a.id) - parseInt(b.id);
+    });
+    let brandSet = new Set();
+    let noSugarCount = 0;
+    let iceCount = 0;
+    let hotCount = 0;
+    let loyalCount = 1;
+
+    for (let i = 0; i < chronological.length; i++) {
+       const r = chronological[i];
+       if (i === 0 && !unlockedMap.has('first_blood')) unlockedMap.set('first_blood', r);
+       if (i === 199 && !unlockedMap.has('fifty_cups')) unlockedMap.set('fifty_cups', r);
+       if (r.brand && !brandSet.has(r.brand)) {
+           brandSet.add(r.brand);
+           if (brandSet.size === 15 && !unlockedMap.has('five_brands')) unlockedMap.set('five_brands', r);
+       }
+       if (r.sweetness === '不另外加糖') {
+           noSugarCount++;
+           if (noSugarCount === 50 && !unlockedMap.has('no_sugar')) unlockedMap.set('no_sugar', r);
+       }
+       if (r.cost >= 15 && !unlockedMap.has('rich_guy')) unlockedMap.set('rich_guy', r);
+       if (i > 0) {
+           if (r.brand && r.brand === chronological[i-1].brand) {
+               loyalCount++;
+               if (loyalCount === 7 && !unlockedMap.has('loyalist')) unlockedMap.set('loyalist', r);
+           } else {
+               loyalCount = 1;
+           }
+       }
+       if (r.temperature?.includes('冰')) {
+           iceCount++;
+           if (iceCount === 100 && !unlockedMap.has('ice_king')) unlockedMap.set('ice_king', r);
+       }
+       if (r.temperature?.includes('热')) {
+           hotCount++;
+           if (hotCount === 100 && !unlockedMap.has('hot_king')) unlockedMap.set('hot_king', r);
+       }
+    }
+
+    const achievementsList = [
+      { id: 'first_blood', icon: '🍼', title: '初次邂逅', desc: '记录你的第一杯饮品', isUnlocked: unlockedMap.has('first_blood'), trigger: unlockedMap.get('first_blood'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，命运的齿轮开始转动。`, comment: `这是你在《老糖人》记录的第一杯奶茶。当时的你一定没想过，这仅仅是一条“不归路”的开始……` }) },
+      { id: 'loyalist', icon: '❤️', title: '品牌死忠', desc: '连续 7 杯喝同一个品牌', isUnlocked: unlockedMap.has('loyalist'), trigger: unlockedMap.get('loyalist'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你达成了最高级别的羁绊。`, comment: `连续 7 杯「${t.brand || '该品牌'}」！你这已经不是爱了，你简直是他们家流落在外的野生代言人。` }) },
+      { id: 'five_brands', icon: '🌍', title: '海王品鉴', desc: '品尝过 15 个不同的品牌', isUnlocked: unlockedMap.has('five_brands'), trigger: unlockedMap.get('five_brands'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的花心版图再次扩张。`, comment: `在尝遍了 14 个品牌后，最终是这杯「${t.brand || '新品牌'}」帮你补齐了海王拼图。你没有偏爱，你只是心碎成了 15 瓣，每一瓣都爱着不同的快乐水。` }) },
+      { id: 'no_sugar', icon: '🧘', title: '清糖苦行僧', desc: '累计喝过 50 杯不另外加糖', isUnlocked: unlockedMap.has('no_sugar'), trigger: unlockedMap.get('no_sugar'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你立地成佛。`, comment: `累计 50 杯“不另外加糖”！你点的是奶茶吗？不，你点的是对世俗欲望的无情嘲讽。全国 99% 的清糖佛子正在为你点赞。` }) },
+      { id: 'ice_king', icon: '🧊', title: '绝对零度', desc: '累计喝过 100 杯冷饮', isUnlocked: unlockedMap.has('ice_king'), trigger: unlockedMap.get('ice_king'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的胃壁凝结成冰。`, comment: `第 100 杯冷饮下肚！就算是凛冬将至，也无法阻止你对冰块的狂热。承认吧，你的血液里现在流淌的都是冰水混合物。` }) },
+      { id: 'hot_king', icon: '♨️', title: '养生达人', desc: '累计喝过 100 杯热饮', isUnlocked: unlockedMap.has('hot_king'), trigger: unlockedMap.get('hot_king'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，保温杯里泡枸杞。`, comment: `第 100 杯热饮！你成功把奶茶喝出了老中医熬药的养生感。这杯烫嘴的「${t.type}」，是你对多巴胺最后的倔强。` }) },
+      { id: 'rich_guy', icon: '💸', title: '破产预警', desc: '点过一杯价格超过 15 元的饮品', isUnlocked: unlockedMap.has('rich_guy'), trigger: unlockedMap.get('rich_guy'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的钱包发出了悲鸣。`, comment: `这杯高达 ${t.cost} 元的「${t.brand || ''} · ${t.type}」，刺痛了钱包，却抚慰了灵魂。没关系，钱没有消失，它只是变成了你身上的肉肉陪着你。` }) },
+      { id: 'fifty_cups', icon: '👑', title: '奶茶土匪', desc: '累计记录达到 200 杯', isUnlocked: unlockedMap.has('fifty_cups'), trigger: unlockedMap.get('fifty_cups'), buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你登上了糖分王座。`, comment: `第 200 杯！你已经不是普通的爱好者了，你是让整条街奶茶店老板都笑得合不拢嘴的老糖人。` }) },
+    ];
+
+    return { unlockedMap, achievementsList };
   };
 
   
@@ -521,11 +585,10 @@ export default function App() {
 const handleSaveDrink = () => {
     if (!currentDate) return;
     
-    // 👉 新增：解析表单里的日期
     if (!draftDate) {
-  showToast("请选择有效日期", "error");
-  return;
-}
+      showToast("请选择有效日期", "error");
+      return;
+    }
     const [dYear, dMonth, dDay] = draftDate.split('-').map(Number);
     
     const newRecord: DrinkRecord = {
@@ -542,13 +605,41 @@ const handleSaveDrink = () => {
       sweetness: draftSweetness,
     };
     
-    if (editingRecordId) {
-      setRecords(prev => prev.map(r => r.id === editingRecordId ? { ...newRecord } : r));
+    const newRecords = editingRecordId
+      ? records.map(r => r.id === editingRecordId ? { ...newRecord } : r)
+      : [...records, newRecord];
+
+    // 🌟 主机级体验拦截器：判断是否在这一口奶茶后解锁了新成就！
+    if (!editingRecordId) {
+       const oldUnlocked = getAchievementsData(records).unlockedMap;
+       const newUnlocked = getAchievementsData(newRecords).unlockedMap;
+
+       let newlyUnlockedId = null;
+       for (const key of newUnlocked.keys()) {
+           if (!oldUnlocked.has(key)) {
+               newlyUnlockedId = key;
+               break;
+           }
+       }
+
+       if (newlyUnlockedId) {
+           // 引爆双段式长震动
+           triggerHaptic('success');
+           // 召唤流光横幅
+           setAchievementBanner(newlyUnlockedId);
+           // 5秒后自动隐匿
+           setTimeout(() => setAchievementBanner(null), 5000);
+       } else {
+           // 如果没有成就，也给一个基础的保存震动反馈
+           triggerHaptic('medium');
+       }
     } else {
-      setRecords(prev => [...prev, newRecord]);
+       triggerHaptic('light'); // 编辑操作的轻反馈
     }
+
+    setRecords(newRecords);
     setShowAddModal(false);
-  }; // ✨ 就是这里！之前少了这个闭合的括号，导致后面的函数全被吞了！
+  };
 
   // 将截图函数改为接收 targetRef 参数，实现复用 (👉 加回了 | null)
   const generateReceiptImageBlob = async (targetRef: React.RefObject<HTMLDivElement | null>) => {
@@ -2609,6 +2700,7 @@ const handleSaveDrink = () => {
       </AnimatePresence>
 
         {/* 🌟 成就勋章墙弹窗 (全自动计算逻辑 + 时光倒流算法) */}
+      {/* 🌟 成就勋章墙弹窗 (精简版：使用全局引擎) */}
       <AnimatePresence>
         {showAchievementsModal && (
           <motion.div
@@ -2618,91 +2710,12 @@ const handleSaveDrink = () => {
             className="fixed inset-0 z-[120] bg-bg-app flex flex-col sm:max-w-[420px] sm:mx-auto sm:border-x sm:border-border-main"
           >
             {(() => {
-             // 🧠 核心：时光倒流算法 (按真实的饮用日期从老到新排，解决补录数据时间错乱Bug)
-              const unlockedMap = new Map(); // 用于存储成就ID和对应的【触发饮品记录】
-              const chronological = [...records].sort((a, b) => {
-                  if (a.year !== b.year) return a.year - b.year;
-                  if (a.month !== b.month) return a.month - b.month;
-                  if (a.day !== b.day) return a.day - b.day;
-                  return parseInt(a.id) - parseInt(b.id); // 同一天的按录入先后顺序
-              });
-              let brandSet = new Set();
-              let noSugarCount = 0;
-              let iceCount = 0;
-              let hotCount = 0;
-              let loyalCount = 1;
-
-              for (let i = 0; i < chronological.length; i++) {
-                 const r = chronological[i];
-
-                 // 1. 初次邂逅
-                 if (i === 0 && !unlockedMap.has('first_blood')) unlockedMap.set('first_blood', r);
-                 // 8. 奶茶土匪
-                 if (i === 199 && !unlockedMap.has('fifty_cups')) unlockedMap.set('fifty_cups', r);
-
-                 // 3. 海王品鉴
-                 if (r.brand && !brandSet.has(r.brand)) {
-                     brandSet.add(r.brand);
-                     if (brandSet.size === 15 && !unlockedMap.has('five_brands')) unlockedMap.set('five_brands', r);
-                 }
-
-                 // 4. 清糖苦行僧
-                 if (r.sweetness === '不另外加糖') {
-                     noSugarCount++;
-                     if (noSugarCount === 50 && !unlockedMap.has('no_sugar')) unlockedMap.set('no_sugar', r);
-                 }
-
-                 // 7. 破产预警
-                 if (r.cost >= 15 && !unlockedMap.has('rich_guy')) unlockedMap.set('rich_guy', r);
-
-                 // 2. 品牌死忠
-                 if (i > 0) {
-                     if (r.brand && r.brand === chronological[i-1].brand) {
-                         loyalCount++;
-                         if (loyalCount === 7 && !unlockedMap.has('loyalist')) unlockedMap.set('loyalist', r);
-                     } else {
-                         loyalCount = 1; // 中断，重新计算
-                     }
-                 }
-
-                 // 5. 绝对零度
-                 if (r.temperature?.includes('冰')) {
-                     iceCount++;
-                     if (iceCount === 100 && !unlockedMap.has('ice_king')) unlockedMap.set('ice_king', r);
-                 }
-
-                 // 6. 养生达人
-                 if (r.temperature?.includes('热')) {
-                     hotCount++;
-                     if (hotCount === 100 && !unlockedMap.has('hot_king')) unlockedMap.set('hot_king', r);
-                 }
-              }
-
-              // 成就字典数据 (注入了你刚才定稿的专属文案)
-              const achievementsList = [
-                { id: 'first_blood', icon: '🍼', title: '初次邂逅', desc: '记录你的第一杯饮品', isUnlocked: unlockedMap.has('first_blood'), trigger: unlockedMap.get('first_blood'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，命运的齿轮开始转动。`, comment: `这是你在《老糖人》记录的第一杯奶茶。当时的你一定没想过，这仅仅是一条“不归路”的开始……` }) },
-                { id: 'loyalist', icon: '❤️', title: '品牌死忠', desc: '连续 7 杯喝同一个品牌', isUnlocked: unlockedMap.has('loyalist'), trigger: unlockedMap.get('loyalist'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你达成了最高级别的羁绊。`, comment: `连续 7 杯「${t.brand || '该品牌'}」！你这已经不是爱了，你简直是他们家流落在外的野生代言人。建议拿着这串记录直接去找老板入股。` }) },
-                { id: 'five_brands', icon: '🌍', title: '海王品鉴', desc: '品尝过 15 个不同的品牌', isUnlocked: unlockedMap.has('five_brands'), trigger: unlockedMap.get('five_brands'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的花心版图再次扩张。`, comment: `在尝遍了 14 个品牌后，最终是这杯「${t.brand || '新品牌'}」帮你补齐了海王拼图。你没有偏爱，你只是心碎成了 15 瓣，每一瓣都爱着不同的快乐水。` }) },
-                { id: 'no_sugar', icon: '🧘', title: '清糖苦行僧', desc: '累计喝过 50 杯不另外加糖', isUnlocked: unlockedMap.has('no_sugar'), trigger: unlockedMap.get('no_sugar'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你立地成佛。`, comment: `累计 50 杯“不另外加糖”！你点的是奶茶吗？不，你点的是对世俗欲望的无情嘲讽。全国 99% 的清糖佛子正在为你点赞。` }) },
-                { id: 'ice_king', icon: '🧊', title: '绝对零度', desc: '累计喝过 100 杯冷饮', isUnlocked: unlockedMap.has('ice_king'), trigger: unlockedMap.get('ice_king'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的胃壁凝结成冰。`, comment: `第 100 杯冷饮下肚！就算是凛冬将至，也无法阻止你对冰块的狂热。承认吧，你的血液里现在流淌的都是冰水混合物。` }) },
-                { id: 'hot_king', icon: '♨️', title: '养生达人', desc: '累计喝过 100 杯热饮', isUnlocked: unlockedMap.has('hot_king'), trigger: unlockedMap.get('hot_king'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，保温杯里泡枸杞。`, comment: `第 100 杯热饮！你成功把奶茶喝出了老中医熬药的养生感。这杯烫嘴的「${t.type}」，是你对多巴胺最后的倔强。` }) },
-                { id: 'rich_guy', icon: '💸', title: '破产预警', desc: '点过一杯价格超过 15 元的饮品', isUnlocked: unlockedMap.has('rich_guy'), trigger: unlockedMap.get('rich_guy'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你的钱包发出了悲鸣。`, comment: `这杯高达 ${t.cost} 元的「${t.brand || ''} · ${t.type}」，刺痛了钱包，却抚慰了灵魂。没关系，钱没有消失，它只是变成了你身上的肉肉陪着你。` }) },
-                { id: 'fifty_cups', icon: '👑', title: '奶茶土匪', desc: '累计记录达到 200 杯', isUnlocked: unlockedMap.has('fifty_cups'), trigger: unlockedMap.get('fifty_cups'), 
-                  buildText: (t:any) => ({ date: `${t.year}年${t.month + 1}月${t.day}日，你登上了糖分王座。`, comment: `第 200 杯！你已经不是普通的爱好者了，你是让整条街奶茶店老板都笑得合不拢嘴的老糖人。` }) },
-              ];
-
+              // 👉 直接调用刚才写好的全局成就引擎
+              const { achievementsList } = getAchievementsData(records);
               const unlockedCount = achievementsList.filter(a => a.isUnlocked).length;
 
               return (
                 <>
-                  {/* Header */}
                   <div className="flex items-center justify-between px-6 pt-12 pb-4 bg-bg-app z-20">
                     <div className="flex flex-col">
                       <h2 className="text-3xl font-black text-text-main tracking-tight mb-1">
@@ -2717,7 +2730,6 @@ const handleSaveDrink = () => {
                     </button>
                   </div>
 
-                  {/* Body */}
                   <div className="flex-1 overflow-y-auto px-5 py-2 pb-10 custom-scrollbar relative">
                     <div className="w-full h-2 bg-bg-input rounded-full mb-6 overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${(unlockedCount / achievementsList.length) * 100}%` }} transition={{ duration: 1 }} className="h-full bg-gradient-to-r from-[#8E7558] to-[#D2B48C] rounded-full" />
@@ -2726,11 +2738,8 @@ const handleSaveDrink = () => {
                     <div className="grid grid-cols-2 gap-4">
                       {achievementsList.map((ach, idx) => (
                         <motion.div
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: idx * 0.05 }}
+                          initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}
                           key={ach.id}
-                          // 👇 核心交互：点击已解锁的展示SSR卡片，点击未解锁的震动+Toast提示
                           onClick={() => {
                               if (ach.isUnlocked) {
                                   triggerHaptic('medium');
@@ -2759,6 +2768,61 @@ const handleSaveDrink = () => {
             })()}
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* 🌟 主机级成就解锁弹窗 (Xbox / PS Style 悬浮横幅) */}
+      <AnimatePresence>
+        {achievementBanner && (() => {
+          const achvData = getAchievementsData(records).achievementsList.find(a => a.id === achievementBanner);
+          if (!achvData) return null;
+          return (
+            <motion.div
+              initial={{ y: -100, opacity: 0, scale: 0.95 }}
+              animate={{ y: 24, opacity: 1, scale: 1 }}
+              exit={{ y: -100, opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", damping: 18, stiffness: 250 }}
+              className="fixed top-0 left-1/2 -translate-x-1/2 z-[300] w-[92%] max-w-[360px] cursor-pointer"
+              onClick={() => {
+                triggerHaptic('light');
+                setAchievementBanner(null);
+                setSelectedAchv(achvData); // 点击横幅直接展示高光卡片！
+              }}
+            >
+              {/* 高级暗黑金属质感底板 */}
+              <div className="relative overflow-hidden rounded-[20px] bg-[#161618] border-[1px] border-[#D2B48C]/40 shadow-[0_30px_60px_rgba(0,0,0,0.6)] p-4 flex items-center gap-4">
+                
+                {/* 内部流光扫过特效 (纯 Framer Motion 实现，无需 CSS keyframes) */}
+                <motion.div 
+                  initial={{ x: '-150%' }}
+                  animate={{ x: '200%' }}
+                  transition={{ repeat: Infinity, duration: 2.5, ease: "linear", delay: 0.5 }}
+                  className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 pointer-events-none"
+                />
+
+                {/* 背景金色光晕 */}
+                <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#D2B48C]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                {/* 奖杯 Icon 容器 */}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8E7558] to-[#D2B48C] flex items-center justify-center text-2xl shrink-0 shadow-inner z-10 border border-[#D2B48C]/50">
+                  {achvData.icon}
+                </div>
+
+                {/* 文案区 */}
+                <div className="flex-1 min-w-0 relative z-10">
+                  <div className="text-[#D2B48C] text-[10px] font-black tracking-widest uppercase mb-0.5 drop-shadow-md">
+                    Achievement Unlocked
+                  </div>
+                  <div className="text-white font-bold text-base truncate drop-shadow-md">
+                    {achvData.title}
+                  </div>
+                  <div className="text-white/60 text-[11px] truncate mt-0.5 font-medium">
+                    {achvData.desc}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
         {/* 🌟 隐藏款 SSR 高光成就展示卡片 (Centered Modal) */}
       <AnimatePresence>
