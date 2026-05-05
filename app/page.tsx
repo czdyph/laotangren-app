@@ -5,6 +5,8 @@ import localforage from 'localforage';
 import { motion, AnimatePresence } from "framer-motion";
 import { Coffee, BarChart3, Settings as SettingsIcon, Plus, Edit2, Share, Trash2, ChevronLeft, ChevronRight, MessageSquare, Info, Flame, X, Search, Trophy} from "lucide-react";
 import * as htmlToImage from 'html-to-image';
+import confetti from 'canvas-confetti';
+import { Preferences } from '@capacitor/preferences';
 
 interface DrinkRecord {
   id: string;
@@ -414,14 +416,137 @@ export default function App() {
     });
   }, [records, isLoaded]);
 
+// 👇 ================= 新增：Android 桌面小组件静默同步引擎 ================= 👇
   useEffect(() => {
+    if (!isLoaded) return;
+
+    const syncWidgetData = async () => {
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const today = now.getDate();
+
+        // --- 1. 计算当月数据 ---
+        const currentMonthRecords = records.filter(r => r.month === month && r.year === year);
+        const mCost = currentMonthRecords.reduce((sum, r) => sum + r.cost, 0);
+        
+        const heatMapMap = new Map();
+        currentMonthRecords.forEach(r => {
+          heatMapMap.set(r.day, (heatMapMap.get(r.day) || 0) + 1);
+        });
+        const heatMap = Array.from(heatMapMap.entries()).map(([day, count]) => ({ day, count }));
+
+        // --- 2. 计算本周数据 ---
+        const dayOfW = now.getDay(); 
+        let daysToSubtract = dayOfW;
+        if (weekStart === 'monday') { 
+           daysToSubtract = dayOfW === 0 ? 6 : dayOfW - 1;
+        }
+        const startOfWeek = new Date(year, month, today - daysToSubtract);
+        const endOfWeek = new Date(year, month, today - daysToSubtract + 6);
+
+        const currentWeekRecords = records.filter(r => {
+          const d = new Date(r.year, r.month, r.day);
+          return d >= startOfWeek && d <= endOfWeek;
+        });
+        
+        const wCost = currentWeekRecords.reduce((sum, r) => sum + r.cost, 0);
+        
+        // 🌟 【核心修改 1】：把计算出的动态图片写入 Map
+        const timelineMap = new Map();
+        currentWeekRecords.forEach(r => {
+          const d = new Date(r.year, r.month, r.day);
+          
+          // 🧠 核心：根据用户的设置，决定这里传递什么图片给 Android
+          let finalImage = "";
+          const brandKey = getBrandKey(r.brand || "");
+          const logoFile = brandKey ? getBrandLogoFile(brandKey) : null;
+          const shouldShowBrandLogo = calendarImageMode === 'brand' && Boolean(logoFile);
+          
+          if (shouldShowBrandLogo) {
+             finalImage = `/logos/${logoFile}`; // 品牌模式：传相对路径
+          } else if (isExportableImageSrc(r.imageUrl)) {
+             finalImage = r.imageUrl; // 贴纸模式：传庞大的 Base64 字符串
+          } else if (logoFile) {
+             finalImage = `/logos/${logoFile}`; // 兜底：还是传品牌
+          }
+
+          timelineMap.set(d.getDate(), { isHit: true, imageUrl: finalImage }); 
+        });
+
+        // 🌟 【核心修改 2】：生成包含图片地址的最近7天时间线
+        const timeline = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startOfWeek);
+          d.setDate(d.getDate() + i);
+          const dayData = timelineMap.get(d.getDate());
+          timeline.push({
+            dayOfWeek: i + 1,
+            date: d.getDate(),
+            isHit: !!dayData,
+            imageUrl: dayData ? dayData.imageUrl : ""
+          });
+        }
+
+        // --- 3. 构造 JSON 数据 ---
+        const widgetData = {
+          monthlyData: { month: month + 1, totalCost: parseFloat(mCost.toFixed(2)), totalCups: currentMonthRecords.length, heatMap: heatMap },
+          weeklyData: { currentCost: parseFloat(wCost.toFixed(2)), limit: parseFloat(weeklyBudget) || 0, timeline: timeline }
+        };
+
+        // --- 4. 写入 Android 底层 ---
+        await Preferences.set({ key: 'SUGAR_WIDGET_DATA', value: JSON.stringify(widgetData) });
+        
+        console.log('✅ 桌面小组件数据已静默同步');
+      } catch (error) {
+        console.warn('桌面小组件同步跳过 (当前可能非 Android 环境)');
+      }
+    };
+
+    syncWidgetData();
+    // 🌟 【核心修改 3】：必须把 calendarImageMode 放入依赖数组，这样用户一切换设置，桌面立刻生效！
+  }, [records, weeklyBudget, weekStart, calendarImageMode, isLoaded]); 
+  // 👆 ================= 新增结束 ================= 👆
+useEffect(() => {
     if (!isLoaded) return;
     if (typeof window !== 'undefined') {
       localStorage.setItem('boba_isDark', isDark.toString());
+
+      // 1. 先切换页面的 dark 类名
       if (isDark) {
         document.documentElement.classList.add('dark');
       } else {
         document.documentElement.classList.remove('dark');
+      }
+
+     // 2. 🌟 变色龙伪装术：延迟一帧，等待页面背景色切换完毕后，吸取真实颜色！
+      setTimeout(() => {
+        // 抓取带有 bg-bg-app 的主容器的真实 RGB 颜色
+        const container = document.querySelector('.bg-bg-app') || document.body;
+        const actualBgColor = window.getComputedStyle(container).backgroundColor;
+        
+        // 🌟 核心修复：绝对不能用 remove() 暴力删除！温和地寻找并修改它，与 React 和平共处
+        let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+          // 如果找到了，只改变颜色
+          metaThemeColor.setAttribute('content', actualBgColor);
+        } else {
+          // 如果没找到，再安全地创建并插入
+          metaThemeColor = document.createElement('meta');
+          metaThemeColor.setAttribute('name', 'theme-color');
+          metaThemeColor.setAttribute('content', actualBgColor);
+          document.head.appendChild(metaThemeColor);
+        }
+      }, 50);
+
+      // 3. 苹果 iOS 的透明全屏指令
+      let appleStatusMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+      if (!appleStatusMeta) {
+        appleStatusMeta = document.createElement('meta');
+        appleStatusMeta.setAttribute('name', 'apple-mobile-web-app-status-bar-style');
+        appleStatusMeta.setAttribute('content', 'black-translucent');
+        document.head.appendChild(appleStatusMeta);
       }
     }
   }, [isDark, isLoaded]);
@@ -901,30 +1026,8 @@ const handleSaveDrink = () => {
   };
 
   // Avoid hydration mismatch by waiting for mount
-  if (!currentDate) return <div className="h-screen w-full bg-bg-app"></div>;
-
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
-  const currentDay = currentDate.getDate();
-  const currentDayOfWeek = currentDate.getDay();
-
-  const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
-
-  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-  let firstDayOfWeek = getFirstDayOfMonth(currentMonth, currentYear);
-  let weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-
-  // 🌟 核心逻辑：如果设置为周一开头，对齐头部和月首空格
-  if (weekStart === 'monday') {
-    weekDays = ['一', '二', '三', '四', '五', '六', '日'];
-    firstDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-  }
-
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanks = Array.from({ length: firstDayOfWeek }, (_, i) => i);
-  const weekDaysFull = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-// 🧠 意志力与打卡计算引擎 (逻辑修正：只要连胜未断，优先显示打卡)
+// 👇 1. 核心修复：将所有的状态和 Hook (包括打卡引擎) 移到 early return 之前！
+  // 🧠 意志力与打卡计算引擎
   const disciplineStats = (() => {
     if (records.length === 0) return { streak: 0, sober: 0, type: 'none', comment: "开启你的第一杯吧！" };
 
@@ -945,7 +1048,6 @@ const handleSaveDrink = () => {
     const drankToday = uniqueDays[0] === todayStr;
     const drankYesterday = uniqueDays.includes(yesterdayStr);
 
-    // 1. 计算连续打卡 (Streak)
     let streak = 0;
     if (drankToday || drankYesterday) {
       let checkDate = new Date(drankToday ? todayClean : yesterday);
@@ -960,7 +1062,6 @@ const handleSaveDrink = () => {
       }
     }
 
-    // 2. 计算戒断天数 (Sober)
     let soberDays = 0;
     if (!drankToday) {
       const lastDateParts = uniqueDays[0].split('-');
@@ -969,11 +1070,9 @@ const handleSaveDrink = () => {
       soberDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     }
 
-    // 3. 决定显示类型：只要打卡未中断(今天或昨天喝过)，优先显示打卡
     const showStreak = drankToday || (drankYesterday && streak > 0);
     const displayType = showStreak ? 'streak' : 'sober';
 
-    // 4. 毒舌文案引擎
     let comment = "";
     if (showStreak) {
       if (streak >= 7) comment = "勋章建议直接焊在脑门上。胰岛：‘求求了，歇一天吧’。";
@@ -985,6 +1084,69 @@ const handleSaveDrink = () => {
 
     return { streak, sober: soberDays, type: displayType, comment };
   })();
+
+  // 🚀 多巴胺高潮引擎：监听打卡连胜变化
+  const [showStreakAnim, setShowStreakAnim] = useState(false);
+  const [lastStreak, setLastStreak] = useState(-1);
+
+  useEffect(() => {
+    if (!isLoaded || !disciplineStats || lastStreak === -1) {
+      if (disciplineStats && lastStreak === -1) setLastStreak(disciplineStats.streak);
+      return;
+    }
+    
+    if (disciplineStats.streak > lastStreak) {
+      const newStreak = disciplineStats.streak;
+      
+      setShowStreakAnim(true);
+      setTimeout(() => setShowStreakAnim(false), 3000);
+      
+      const milestones = [3, 7, 14, 21, 30, 50, 100];
+      if (milestones.includes(newStreak)) {
+        triggerHaptic('success'); 
+        
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.5 },
+          colors: ['#F97316', '#FCD34D', '#ffffff', '#8E7558', '#D2B48C'],
+          zIndex: 9999
+        });
+      } else {
+        triggerHaptic('medium'); 
+      }
+    }
+    setLastStreak(disciplineStats.streak);
+  }, [disciplineStats?.streak, isLoaded]);
+
+  const nextMilestone = disciplineStats ? (disciplineStats.streak < 3 ? 3 : disciplineStats.streak < 7 ? 7 : disciplineStats.streak < 14 ? 14 : disciplineStats.streak < 21 ? 21 : Math.ceil((disciplineStats.streak + 1) / 7) * 7) : 3;
+  const streakProgress = disciplineStats ? (disciplineStats.streak / nextMilestone) * 100 : 0;
+
+
+  // 👇 2. 这句 Early Return 必须放在所有的 Hooks 下面！
+  if (!currentDate) return <div className="h-screen w-full bg-bg-app"></div>;
+
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
+  const currentDay = currentDate.getDate();
+  const currentDayOfWeek = currentDate.getDay();
+
+  const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
+
+  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+  let firstDayOfWeek = getFirstDayOfMonth(currentMonth, currentYear);
+  let weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+
+  if (weekStart === 'monday') {
+    weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+    firstDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+  }
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstDayOfWeek }, (_, i) => i);
+  const weekDaysFull = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
   // Stats Calculations
   const currentMonthRecords = records.filter(r => r.month === currentMonth && r.year === currentYear);
   const activeDay = selectedDay || currentDay;
@@ -1239,9 +1401,8 @@ const handleSaveDrink = () => {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full w-full">
             
 {/* 📌 核心重构 2：优雅收缩，保留圆润美感，拒绝廉价压缩 */}
-            {/* 优化 1：顶部 pt-12 改为 pt-8，底部 pb-5 改为 pb-4，收紧无意义的边缘留白 */}
-            <div className="flex-none bg-bg-app px-5 pt-8 pb-4 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border-b border-border-main/40 z-20 relative">
-              
+            {/* 👇 恢复原本的 pt-10，不要用 calc 压缩空间了，让“5月”标题安稳地待在下面 */}
+            <div className="flex-none bg-bg-app px-5 pt-10 pb-4 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border-b border-border-main/40 z-20 relative">
 {/* Header (精致排版) */}
               <div className="mb-4 relative w-full">
                 {/* 👇 修复 1：将 top-1 改为 top-0，让右上角的按钮组微微上移 4px */}
@@ -1266,11 +1427,77 @@ const handleSaveDrink = () => {
                         <p className="text-text-muted text-[13px] font-medium tracking-wide truncate flex-1 min-w-0">
                           {currentMonth + 1}月{currentDay}日 {weekDaysFull[currentDayOfWeek]}
                         </p>
+                        {/* 🌟 重构：多巴胺爆棚的打卡勋章 (自带注水进度条与数字老虎机) */}
                         {disciplineStats && (
-                          <div onClick={() => showToast(disciplineStats.comment, 'info')} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-bg-input/60 backdrop-blur-md border border-border-main/40 text-[10px] font-bold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0 whitespace-nowrap">
-                            {disciplineStats.type === 'streak' ? (<><Flame size={11} className="text-orange-500 fill-orange-500 shrink-0" /> <span className="text-orange-600">连续打卡 {disciplineStats.streak} 天</span></>) : (<><Trophy size={11} className="text-green-500 shrink-0" /> <span className="text-green-600">连续戒糖 {disciplineStats.sober} 天</span></>)}
-                            <span className="text-text-muted opacity-40 ml-0.5">| 吐槽</span>
-                          </div>
+                          <motion.div 
+                            layout // 开启布局平滑过渡，让徽章变长时极其丝滑
+                            onClick={() => {
+                                showToast(disciplineStats.comment, 'info');
+                                // 点击时也可以手动触发一下展开，增加互动感
+                                setShowStreakAnim(true);
+                                setTimeout(() => setShowStreakAnim(false), 2000);
+                            }} 
+                            className="relative flex items-center gap-1 px-2.5 py-1 rounded-full bg-bg-input/60 backdrop-blur-md border border-border-main/40 text-[10px] font-bold cursor-pointer active:scale-95 shadow-sm overflow-hidden shrink-0"
+                          >
+                            {/* 背景注水进度条 (使用 Framer Motion 控制水位) */}
+                            {disciplineStats.type === 'streak' && (
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${streakProgress}%` }}
+                                transition={{ type: "spring", damping: 20, delay: 0.2 }}
+                                className="absolute left-0 top-0 bottom-0 bg-orange-500/15 z-0"
+                              />
+                            )}
+
+                            {disciplineStats.type === 'streak' ? (
+                              <>
+                                {/* 震动时火焰随之跳动放大 */}
+                                <motion.div animate={showStreakAnim ? { scale: [1, 1.4, 1], rotate: [0, -15, 15, 0] } : {}} transition={{ duration: 0.5 }} className="relative z-10">
+                                  <Flame size={12} className="text-orange-500 fill-orange-500 shrink-0" /> 
+                                </motion.div>
+                                
+                                <span className="text-orange-600 relative z-10 flex items-center">
+                                  连续打卡
+                                  {/* 🎰 数字老虎机纵向翻滚动效 */}
+                                  <div className="relative h-[14px] w-[15px] mx-0.5 overflow-hidden flex justify-center items-center">
+                                    <AnimatePresence mode="popLayout">
+                                      <motion.span
+                                        key={disciplineStats.streak}
+                                        initial={{ y: 15, opacity: 0 }}
+                                        animate={{ y: 0, opacity: 1 }}
+                                        exit={{ y: -15, opacity: 0 }}
+                                        transition={{ type: "spring", bounce: 0.5 }}
+                                        className="absolute leading-none"
+                                      >
+                                        {disciplineStats.streak}
+                                      </motion.span>
+                                    </AnimatePresence>
+                                  </div>
+                                  天
+                                </span>
+
+                                {/* 记录成功时向右平滑拉伸出的文字 */}
+                                <AnimatePresence>
+                                  {showStreakAnim && (
+                                    <motion.span
+                                      initial={{ width: 0, opacity: 0, marginLeft: 0 }}
+                                      animate={{ width: 'auto', opacity: 1, marginLeft: 6 }}
+                                      exit={{ width: 0, opacity: 0, marginLeft: 0 }}
+                                      className="text-[9px] text-orange-500/90 relative z-10 whitespace-nowrap overflow-hidden border-l border-orange-500/20 pl-1.5"
+                                    >
+                                      还差 {nextMilestone - disciplineStats.streak} 天升级
+                                    </motion.span>
+                                  )}
+                                </AnimatePresence>
+                              </>
+                            ) : (
+                              <>
+                                <Trophy size={11} className="text-green-500 shrink-0 relative z-10" /> 
+                                <span className="text-green-600 relative z-10">连续戒糖 {disciplineStats.sober} 天</span>
+                                <span className="text-text-muted opacity-40 ml-0.5 relative z-10">| 吐槽</span>
+                              </>
+                            )}
+                          </motion.div>
                         )}
                       </div>
                     </motion.div>
@@ -1326,7 +1553,7 @@ const handleSaveDrink = () => {
                               }
                             }, 100);
                           }}
-                          className={`aspect-square flex items-center justify-center rounded-[14px] text-sm font-medium relative overflow-hidden transition-colors cursor-pointer ${isSelected ? 'bg-[#8E7558] text-white shadow-md ring-2 ring-[#8E7558]' : (!firstRecord ? 'bg-bg-input text-text-main hover:bg-border-main' : 'bg-border-main')}`}
+                          className={`aspect-square flex items-center justify-center rounded-[14px] text-sm font-medium relative overflow-hidden transition-colors cursor-pointer ${isSelected ? 'theme-bg text-white shadow-md ring-2 theme-ring' : (!firstRecord ? 'bg-bg-input text-text-main hover:bg-border-main' : 'bg-border-main')}`}
                         >
                           {firstRecord ? (
                             <div className="absolute inset-0 flex items-center justify-center p-1">
@@ -1349,7 +1576,7 @@ const handleSaveDrink = () => {
 
               {/* Add Button */}
               {/* 优化 6：放弃过于粗大的 py-4，使用 iOS 规范里顶级按钮的标准高度 h-[52px]，加深渐变色提升品质感 */}
-              <button onClick={openAddModal} className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white h-[52px] rounded-full text-[16px] font-bold shadow-[0_6px_16px_rgba(142,117,88,0.25)] flex justify-center items-center gap-2 active:scale-95 transition-transform">
+              <button onClick={openAddModal} className="w-full theme-gradient text-white h-[52px] rounded-full text-[16px] font-bold theme-shadow flex justify-center items-center gap-2 active:scale-95 transition-transform">
                 <Plus size={20} strokeWidth={3} />
                 添加一杯
               </button>
@@ -1455,7 +1682,7 @@ const handleSaveDrink = () => {
                             </div>
                             
                             <div className="flex flex-col items-end justify-center h-full gap-1">
-                              <span className="font-bold text-[#8E7558] text-lg">￥{record.cost}</span>
+                              <span className="font-bold theme-text text-lg">￥{record.cost}</span>
                               <span className="flex items-center gap-1 text-[10px] bg-bg-input px-2 py-0.5 rounded text-text-muted font-medium">
                                 <span>{record.sweetness || '标准糖'}</span>
                                 <span>/</span>
@@ -1497,21 +1724,22 @@ const handleSaveDrink = () => {
 
             {/* Time Toggle */}
             <div className="flex gap-2 mb-6">
+              {/* 周/月/年 切换按钮 */}
               <button
                 onClick={() => { setStatPeriod('week'); setStatAnimationKey(prev => prev + 1); }} 
-                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'week' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
+                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'week' ? 'theme-bg shadow-md' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
                 {prefLanguage === 'English' ? 'W' : '周'}
               </button>
               <button
                 onClick={() => { setStatPeriod('month'); setStatAnimationKey(prev => prev + 1); }} 
-                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'month' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
+                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'month' ? 'theme-bg shadow-md' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
                 {prefLanguage === 'English' ? 'M' : '月'}
               </button>
               <button
                 onClick={() => { setStatPeriod('year'); setStatAnimationKey(prev => prev + 1); }} 
-                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'year' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
+                className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${statPeriod === 'year' ? 'theme-bg shadow-md' : 'bg-bg-card hover:bg-bg-input text-text-muted border border-border-main/50'}`}
               >
                 {prefLanguage === 'English' ? 'Y' : '年'}
               </button>
@@ -1681,7 +1909,7 @@ const handleSaveDrink = () => {
                                  className="flex items-center gap-1 bg-orange-500/10 text-orange-600 px-2 py-1 rounded-full text-[10px] font-bold cursor-pointer hover:bg-orange-500/20 active:scale-95 transition-all"
                               >
                                   <Flame size={12} className="fill-orange-500"/>
-                                  高热预警
+                                  高糖预警
                               </div>
                           )}
                       </div>
@@ -1721,9 +1949,9 @@ const handleSaveDrink = () => {
                                           onClick={() => {
                                               triggerHaptic('light');
                                               if (item.count === 0) {
-                                                  showToast(`${item.month + 1}月${item.day}日 · 胰岛很安全，0 杯`, 'info');
+                                                  showToast(`${item.month + 1}月${item.day}日，胰岛很安全，0 杯`, 'info');
                                               } else {
-                                                  showToast(`${item.month + 1}月${item.day}日 · 喝了 ${item.count} 杯，血液纯度已降至糖点。`, 'info');
+                                                  showToast(`${item.month + 1}月${item.day}日，喝了 ${item.count} 杯，血液纯度已降至糖点。`, 'info');
                                               }
                                           }}
                                           // 移除了 opacity，直接使用高饱和颜色，并加上阴影特效
@@ -1747,20 +1975,25 @@ const handleSaveDrink = () => {
               );
             })()}
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-bg-card rounded-[24px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+{/* Stats Grid */}
+            {/* 👇 优化 1：缩小移动端的网格间距 (gap-4 -> gap-3)，为两个卡片内部腾出更多宽度 */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {/* 👇 优化 2：移动端内边距由 p-5 微微收紧为 p-4，并在外层加 min-w-0 防止内容撑破盒子 */}
+              <div className="bg-bg-card rounded-[24px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between min-w-0">
                 
-                <div>
-                  <span className="text-xs text-text-muted font-medium block mb-2">总杯数</span>
-                  <div className={`text-4xl font-black font-mono tracking-tight ${currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? 'text-red-500' : ''}`} style={currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? {} : { color: themeAccent }}>{statCups}</div>
+                <div className="min-w-0 w-full">
+                  <span className="text-xs text-text-muted font-medium block mb-1.5">总杯数</span>
+                  {/* 👇 优化 3：移动端字号降为 text-3xl (30px)，并加上 tracking-tighter 收紧字间距，最后加 truncate 防止破版 */}
+                  <div className={`text-3xl sm:text-4xl font-black font-mono tracking-tighter truncate ${currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? 'text-red-500' : ''}`} style={currentCupLimit > 0 && statCups >= currentCupLimit && statPeriod !== 'year' ? {} : { color: themeAccent }}>{statCups}</div>
                 </div>
                 {renderDisciplineBar(statCups, currentCupLimit, false)}
               </div>
-              <div className="bg-bg-card rounded-[24px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-                <div>
-                  <span className="text-xs text-text-muted font-medium block mb-2">总花费</span>
-                  <div className={`text-4xl font-black font-mono tracking-tight ${currentBudget > 0 && statCost >= currentBudget && statPeriod !== 'year' ? 'text-red-500' : ''}`} style={currentBudget > 0 && statCost >= currentBudget && statPeriod !== 'year' ? {} : { color: themeAccent }}>{parseFloat(statCost.toFixed(2))}</div>
+              
+              <div className="bg-bg-card rounded-[24px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between min-w-0">
+                <div className="min-w-0 w-full">
+                  <span className="text-xs text-text-muted font-medium block mb-1.5">总花费</span>
+                  {/* 👇 优化 4：金额数字同理，这样就算有人喝了 9999.99 元，也能完美展示并保留右侧留白 */}
+                  <div className={`text-3xl sm:text-4xl font-black font-mono tracking-tighter truncate ${currentBudget > 0 && statCost >= currentBudget && statPeriod !== 'year' ? 'text-red-500' : ''}`} style={currentBudget > 0 && statCost >= currentBudget && statPeriod !== 'year' ? {} : { color: themeAccent }}>{parseFloat(statCost.toFixed(2))}</div>
                 </div>
                 {renderDisciplineBar(statCost, currentBudget, true)}
               </div>
@@ -1769,15 +2002,16 @@ const handleSaveDrink = () => {
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-base text-text-main font-bold">{prefLanguage === 'English' ? 'Brand Mix' : '品牌占比'}</span>
                   <div className="flex gap-2">
+                    {/* 杯数/花费 切换按钮 */}
                     <button
                       onClick={() => setBrandDonutMode('cups')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${brandDonutMode === 'cups' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-input text-text-muted'}`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${brandDonutMode === 'cups' ? 'theme-bg shadow-sm' : 'bg-bg-input text-text-muted'}`}
                     >
                       {prefLanguage === 'English' ? 'Cups' : '杯数'}
                     </button>
                     <button
                       onClick={() => setBrandDonutMode('cost')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${brandDonutMode === 'cost' ? 'bg-[#D2B48C] text-[#3E2723]' : 'bg-bg-input text-text-muted'}`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${brandDonutMode === 'cost' ? 'theme-bg shadow-sm' : 'bg-bg-input text-text-muted'}`}
                     >
                       {prefLanguage === 'English' ? 'Cost' : '花费'}
                     </button>
@@ -1795,7 +2029,7 @@ const handleSaveDrink = () => {
                         <span className="text-[10px] text-text-muted font-medium">
                           {brandDonutMode === 'cups' ? (prefLanguage === 'English' ? 'Total Cups' : '总杯数') : (prefLanguage === 'English' ? 'Total Cost' : '总花费')}
                         </span>
-                        <span className="text-lg font-black text-[#8E7558] leading-tight">
+                        <span className="text-lg font-black theme-text leading-tight">
                           {brandDonutMode === 'cups'
                             ? `${Math.round(donutTotal)}${prefLanguage === 'English' ? '' : '杯'}`
                             : `￥${donutTotal.toFixed(1)}`}
@@ -1833,7 +2067,7 @@ const handleSaveDrink = () => {
                       <motion.div 
                         initial={{ height: 0 }}
                         animate={{ height: val > 0 ? `${Math.max((val / maxChartVal) * 100, 8)}%` : '4px' }}
-                        className={`w-full max-w-[36px] rounded-t-[6px] rounded-b-[2px] transition-all duration-500 ${val > 0 ? 'bg-gradient-to-b from-[#A58E72] to-[#8E7558]' : 'bg-transparent'}`}
+                        className={`w-full max-w-[36px] rounded-t-[6px] rounded-b-[2px] transition-all duration-500 ${val > 0 ? 'theme-gradient-v' : 'bg-transparent'}`}
                       />
                       <span className="text-[10px] text-text-muted font-medium whitespace-nowrap mt-1 flex-shrink-0">{chartLabels[idx]}</span>
                     </div>
@@ -1932,7 +2166,7 @@ const handleSaveDrink = () => {
                                 <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                                     <motion.div 
                                         initial={{ width: 0 }} animate={{ width: `${(unlockedCount / totalCount) * 100}%` }} transition={{ duration: 1.5, type: 'spring', delay: 0.2 }}
-                                        className="h-full rounded-full bg-gradient-to-r from-[#8E7558] to-[#D2B48C]"
+                                        className="h-full rounded-full theme-gradient"
                                     />
                                 </div>
                             </div>
@@ -1944,9 +2178,22 @@ const handleSaveDrink = () => {
             {/* 下面是你原本的搜索框和设置项... */}
             <div className="bg-bg-card rounded-[24px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4">
               <div className="p-4 border-b border-bg-input">
-                <input type="text" value={settingsSearch} onChange={(e) => setSettingsSearch(e.target.value)} placeholder={prefLanguage === 'English' ? 'Search settings...' : '搜索设置项...'} className="w-full bg-bg-input rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all" />
+                <input type="text" value={settingsSearch} onChange={(e) => setSettingsSearch(e.target.value)} placeholder={prefLanguage === 'English' ? 'Search settings...' : '搜索设置项...'} className="w-full bg-bg-input rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:theme-ring/30 transition-all" />
               </div>
-              {settingMatches(['dark mode', '深色模式']) && <div className="p-4 font-medium flex justify-between items-center"><span className="text-text-main">{prefLanguage === 'English' ? 'Dark Mode' : '深色模式'}</span><button onClick={() => setIsDark(!isDark)} className={`w-12 h-6 rounded-full transition-colors relative ${isDark ? '' : 'bg-border-main'}`} style={isDark ? { backgroundColor: themeAccent } : undefined}><div className={`w-5 h-5 bg-bg-card rounded-full absolute top-[2px] transition-transform ${isDark ? 'translate-x-[26px]' : 'translate-x-[2px]'}`}></div></button></div>}
+              {settingMatches(['dark mode', '深色模式']) && (
+                <div className="p-4 font-medium flex justify-between items-center">
+                  <span className="text-text-main">{prefLanguage === 'English' ? 'Dark Mode' : '深色模式'}</span>
+                  {/* 👇 容器改为 flex items-center 自动垂直居中，px-0.5 提供完美的 2px 左右边距 */}
+                  <button 
+                    onClick={() => setIsDark(!isDark)} 
+                    className={`w-12 h-6 rounded-full transition-colors flex items-center px-0.5 shadow-inner ${isDark ? '' : 'bg-border-main'}`} 
+                    style={isDark ? { backgroundColor: themeAccent } : undefined}
+                  >
+                    {/* 👇 抛弃 absolute，直接用 translate-x-6 (刚好移动 24px，严丝合缝) */}
+                    <div className={`w-5 h-5 bg-white shadow-md rounded-full transition-transform duration-300 ${isDark ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                  </button>
+                </div>
+              )}
               {settingMatches(['theme','主题色']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Theme Accent' : '主题色'}</span><div className="flex gap-2">{['#8E7558','#1D7AFC','#0D9F6E','#D9487D','#F59E0B'].map(c => <button key={c} onClick={() => setThemeAccent(c)} className={`w-7 h-7 rounded-full border-2 ${themeAccent === c ? 'border-text-main' : 'border-transparent'}`} style={{backgroundColor:c}} />)}</div></div>}
               {settingMatches(['calendar image', 'calendar display', '日历图片', '品牌logo', '奶茶贴纸']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Calendar Image' : '日历图片'}</span><div className="flex gap-2">{([{ key: 'brand', label: prefLanguage === 'English' ? 'Brand Logo' : '品牌Logo' },{ key: 'upload', label: prefLanguage === 'English' ? 'Uploaded Photo' : '奶茶贴纸' }] as const).map(item => <button key={item.key} onClick={() => setCalendarImageMode(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${calendarImageMode === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={calendarImageMode === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
               {settingMatches(['font','字体大小']) && <div className="p-4 border-t border-bg-input"><span className="text-sm font-medium block mb-2">{prefLanguage === 'English' ? 'Font Size' : '字体大小'}</span><div className="flex gap-2">{([{ key: 'small', label: prefLanguage === 'English' ? 'Small' : '小' },{ key: 'medium', label: prefLanguage === 'English' ? 'Medium' : '中' },{ key: 'large', label: prefLanguage === 'English' ? 'Large' : '大' }] as const).map(item => <button key={item.key} onClick={() => setFontScale(item.key)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${fontScale === item.key ? 'text-white' : 'bg-bg-input text-text-muted'}`} style={fontScale === item.key ? { backgroundColor: themeAccent } : undefined}>{item.label}</button>)}</div></div>}
@@ -2004,13 +2251,13 @@ const handleSaveDrink = () => {
                     {/* 导出按钮 */}
                     <button 
                       onClick={handleExportData} 
-                      className="flex-1 py-3 rounded-xl bg-bg-input text-text-main font-bold text-[13px] hover:bg-[#8E7558] hover:text-white transition-colors shadow-sm"
+                      className="flex-1 py-3 rounded-xl bg-bg-input text-text-main font-bold text-[13px] hover:theme-bg hover:text-white transition-colors shadow-sm"
                     >
                       {prefLanguage === 'English' ? 'Export Data' : '导出备份 (.json)'}
                     </button>
                     
                     {/* 导入按钮 */}
-                    <label className="flex-1 py-3 rounded-xl bg-bg-input text-text-main font-bold text-[13px] hover:bg-[#8E7558] hover:text-white transition-colors text-center cursor-pointer shadow-sm">
+                    <label className="flex-1 py-3 rounded-xl bg-bg-input text-text-main font-bold text-[13px] hover:theme-bg hover:text-white transition-colors text-center cursor-pointer shadow-sm">
                       {prefLanguage === 'English' ? 'Import Data' : '恢复数据 (.json)'}
                       <input type="file" accept=".json" className="hidden" onChange={handleImportData} />
                     </label>
@@ -2102,7 +2349,7 @@ const handleSaveDrink = () => {
                       type="date"
                       value={draftDate}
                       onChange={e => setDraftDate(e.target.value)}
-                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main shadow-sm border border-border-main/50"
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:theme-ring/40 transition-all font-bold text-text-main shadow-sm border border-border-main/50"
                     />
                   </div>
                   
@@ -2118,7 +2365,7 @@ const handleSaveDrink = () => {
                         setDraftBrand(matchedBrand || val);
                       }}
                       placeholder="例如：霸王茶姬"
-                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:theme-ring/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
                     />
                   </div>
                   
@@ -2130,7 +2377,7 @@ const handleSaveDrink = () => {
                       value={draftName}
                       onChange={e => setDraftName(e.target.value)}
                       placeholder="例如：伯牙绝弦"
-                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
+                      className="w-full bg-bg-card rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:theme-ring/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium shadow-sm border border-border-main/50"
                     />
                   </div>
                   
@@ -2144,7 +2391,7 @@ const handleSaveDrink = () => {
                         value={draftCost}
                         onChange={e => setDraftCost(e.target.value)}
                         placeholder="20"
-                        className="w-full bg-transparent rounded-2xl pl-10 pr-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#8E7558]/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium"
+                        className="w-full bg-transparent rounded-2xl pl-10 pr-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:theme-ring/40 transition-all font-bold text-text-main placeholder:text-text-muted/40 placeholder:font-medium"
                       />
                     </div>
                   </div>
@@ -2159,7 +2406,7 @@ const handleSaveDrink = () => {
                           <button
                             key={size}
                             onClick={() => setDraftSize(size)}
-                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSize === size ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSize === size ? 'theme-bg text-white theme-shadow' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
                           >
                             {size}
                           </button>
@@ -2174,7 +2421,7 @@ const handleSaveDrink = () => {
                           <button
                             key={temp}
                             onClick={() => setDraftTemperature(temp)}
-                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftTemperature === temp ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftTemperature === temp ? 'theme-bg text-white theme-shadow' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
                           >
                             {temp}
                           </button>
@@ -2189,7 +2436,7 @@ const handleSaveDrink = () => {
                           <button 
                             key={sweet}
                             onClick={() => setDraftSweetness(sweet)}
-                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSweetness === sweet ? 'bg-[#8E7558] text-white shadow-[0_4px_10px_rgba(142,117,88,0.3)]' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
+                            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${draftSweetness === sweet ? 'theme-bg text-white theme-shadow' : 'bg-bg-input text-text-muted hover:bg-border-main'}`}
                           >
                             {sweet}
                           </button>
@@ -2204,7 +2451,7 @@ const handleSaveDrink = () => {
               <div className="p-5 pt-4 bg-bg-card border-t border-border-main/40 shrink-0 z-20">
                 <button 
                   onClick={handleSaveDrink}
-                  className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white py-4 rounded-full text-[16px] font-bold shadow-[0_8px_20px_rgba(142,117,88,0.25)] active:scale-95 transition-transform flex justify-center items-center gap-2"
+                  className="w-full theme-gradient text-white py-4 rounded-full text-[16px] font-bold theme-shadow active:scale-95 transition-transform flex justify-center items-center gap-2"
                 >
                   <span>保存记录</span>
                 </button>
@@ -2222,8 +2469,11 @@ const handleSaveDrink = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[#1a1a1e] flex flex-col items-center justify-center p-4 backdrop-blur-md"
+            // 🌟 开放滚动权限
+            className="fixed inset-0 z-[100] bg-[#1a1a1e]/95 overflow-y-auto custom-scrollbar backdrop-blur-md"
           >
+            {/* 🌟 增加最小全屏的安全包裹层 */}
+            <div className="min-h-full flex flex-col items-center justify-center py-12 px-4 w-full">
             <motion.div 
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
@@ -2371,10 +2621,13 @@ const handleSaveDrink = () => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
               onClick={() => setShowReceiptModal(false)} 
-              className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors"
+              // 👇 加上 shrink-0 防止按钮被挤压变形
+              className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors shrink-0"
             >
                 <X size={22} strokeWidth={2.5} />
             </motion.button>
+            
+            </div> {/* 👈 核心：闭合我们刚刚加的安全包裹层 */}
           </motion.div>
         )}
       </AnimatePresence>
@@ -2406,12 +2659,12 @@ const handleSaveDrink = () => {
 
               <div className="flex flex-col items-center justify-center mb-6 relative z-10">
                 <div className="mb-4 drop-shadow-md">
-                  <Coffee size={56} className="text-[#8E7558]" strokeWidth={1.8} />
+                  <Coffee size={56} className="theme-text" strokeWidth={1.8} />
                 </div>
                 <h2 className="text-2xl font-black tracking-tight text-text-main mb-1">
                   Sugar Log
                 </h2>
-                <div className="text-sm font-medium text-[#8E7558]">
+                <div className="text-sm font-medium theme-text">
                   Version 1.0.0
                 </div>
               </div>
@@ -2439,10 +2692,10 @@ const handleSaveDrink = () => {
               </div>
 
               <div className="flex justify-center gap-4 relative z-10">
-                <a href="https://github.com/czdyph/laotangren-app" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-bg-input flex items-center justify-center text-text-main hover:bg-[#8E7558] hover:text-white transition-colors">
+                <a href="https://github.com/czdyph/laotangren-app" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-bg-input flex items-center justify-center text-text-main hover:theme-bg hover:text-white transition-colors">
                   <Info size={18} strokeWidth={2.2} />
                 </a>
-                <a href="mailto:yhdp921@gmail.com" className="w-10 h-10 rounded-full bg-bg-input flex items-center justify-center text-text-main hover:bg-[#8E7558] hover:text-white transition-colors">
+                <a href="mailto:yhdp921@gmail.com" className="w-10 h-10 rounded-full bg-bg-input flex items-center justify-center text-text-main hover:theme-bg hover:text-white transition-colors">
                   <MessageSquare size={18} strokeWidth={2.2} />
                 </a>
               </div>
@@ -2455,13 +2708,17 @@ const handleSaveDrink = () => {
         {shareRecord && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[#1a1a1e] flex flex-col items-center justify-center p-4 backdrop-blur-md"
+            // 🌟 开放滚动权限
+            className="fixed inset-0 z-[100] bg-[#1a1a1e]/95 overflow-y-auto custom-scrollbar backdrop-blur-md"
           >
-            <motion.div 
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              ref={singleReceiptRef}
-              className="bg-[#f8f8f8] w-full max-w-[360px] rounded-t-2xl relative flex flex-col pt-7 pb-4 px-6 text-gray-800 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
-            >
+            {/* 🌟 增加最小全屏的安全包裹层 */}
+            <div className="min-h-full flex flex-col items-center justify-center py-12 px-4 w-full">
+
+              <motion.div 
+                initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+                ref={singleReceiptRef}
+                className="bg-[#f8f8f8] w-full max-w-[360px] rounded-t-2xl relative flex flex-col pt-7 pb-4 px-6 text-gray-800 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
+              >
               {/* Header */}
               {/* --- 1. 顶部抬头：品牌 Logo 居中显示 --- */}
               <div className="flex justify-center items-center w-full mb-5 mt-2 min-h-[4rem]">
@@ -2565,9 +2822,11 @@ const handleSaveDrink = () => {
                 </button>
             </motion.div>
             
-            <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShareRecord(null)} className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors">
+            <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShareRecord(null)} className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors shrink-0">
                 <X size={22} strokeWidth={2.5} />
             </motion.button>
+
+            </div> {/* 👈 核心：闭合安全包裹层 */}
           </motion.div>
         )}
       </AnimatePresence>
@@ -2576,18 +2835,21 @@ const handleSaveDrink = () => {
         {showPosterModal && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-4 backdrop-blur-xl"
+            // 🌟 开放滚动权限
+            className="fixed inset-0 z-[100] bg-black/80 overflow-y-auto custom-scrollbar backdrop-blur-xl"
           >
-            {/* 核心海报内容区 (这个 div 就是最终截图的区域) */}
-            <motion.div 
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              ref={posterRef}
-              className="w-full max-w-[360px] rounded-3xl relative flex flex-col p-8 text-white shadow-[0_20px_80px_rgba(0,0,0,0.5)] overflow-hidden"
-              style={{
-                // 极具质感的暗黑渐变背景
-                background: 'linear-gradient(135deg, #111827 0%, #312e81 50%, #4c1d95 100%)'
-              }}
-            >
+            {/* 🌟 增加最小全屏的安全包裹层 */}
+            <div className="min-h-full flex flex-col items-center justify-center py-12 px-4 w-full">
+
+              {/* 核心海报内容区 (这个 div 就是最终截图的区域) */}
+              <motion.div 
+                initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+                ref={posterRef}
+                className="w-full max-w-[360px] rounded-3xl relative flex flex-col p-8 text-white shadow-[0_20px_80px_rgba(0,0,0,0.5)] overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, #111827 0%, #312e81 50%, #4c1d95 100%)'
+                }}
+              >
               {/* 背景装饰光斑 */}
               <div className="absolute -top-20 -right-20 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none"></div>
               <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
@@ -2615,8 +2877,9 @@ const handleSaveDrink = () => {
                 </div>
               </div>
 
-              {/* 👉 核心：动态文案生成引擎 */}
-              <div className="space-y-5 relative z-10 flex-1">
+{/* 👉 核心：动态文案生成引擎 */}
+              {/* 👇 优化 1：间距从 space-y-5 缩小到 space-y-3.5，增加 flex-col justify-center 让内容垂直居中，底部加 mb-2 保证安全距离 */}
+              <div className="space-y-3.5 relative z-10 flex-1 flex flex-col justify-center mb-2">
                 {(() => {
                   let intro = prefLanguage === 'English' 
                     ? `You've consumed ${statCups} cups during this period.` 
@@ -2651,16 +2914,22 @@ const handleSaveDrink = () => {
 
                   return (
                     <>
-                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                      {/* 👇 优化 2：字号从 text-[15px] 微调至 text-[13.5px]，让大段文字不再显得拥挤 */}
+                      <p className="text-[13.5px] font-medium leading-relaxed text-white/90">
                         {intro}
                       </p>
-                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
-                        {brandStr}
-                      </p>
-                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
-                        {specStr}
-                      </p>
-                      <p className="text-[15px] font-medium leading-relaxed text-white/90">
+                      {/* 👇 优化 3：增加条件渲染 {brandStr && ...}，防止变量为空时多出一个空行撑大空间 */}
+                      {brandStr && (
+                        <p className="text-[13.5px] font-medium leading-relaxed text-white/90">
+                          {brandStr}
+                        </p>
+                      )}
+                      {specStr && (
+                        <p className="text-[13.5px] font-medium leading-relaxed text-white/90">
+                          {specStr}
+                        </p>
+                      )}
+                      <p className="text-[13.5px] font-medium leading-relaxed text-white/90">
                         {prefLanguage === 'English' 
                           ? `Total investment in happiness: ￥${statCost.toFixed(1)}.` 
                           : `你累计向饮茶事业投资了 ￥${statCost.toFixed(1)}，实力有目共睹。`}
@@ -2671,11 +2940,11 @@ const handleSaveDrink = () => {
               </div>
 
               {/* 底部成就印章区域 */}
-              <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-end relative z-10">
+              {/* 👇 优化 4：将 mt-8 改为 mt-auto(强行推到底端)，并加大 pt-8 留出充裕的空间让印章旋转，绝不遮挡文字 */}
+              <div className="mt-auto pt-8 border-t border-white/10 flex justify-between items-end relative z-10">
                 <div className="text-[10px] text-white/40 font-mono">
                   GENERATED BY<br/>SUGAR ULTRA
                 </div>
-                {/* 借用你之前的印章逻辑，做成潮牌贴纸效果 */}
                 <div className="border-[3px] border-pink-400 text-pink-300 px-4 py-2 font-black text-[16px] tracking-widest uppercase transform rotate-6 bg-black/20 backdrop-blur-sm shadow-[0_0_15px_rgba(244,114,182,0.3)]">
                   {getReceiptTitle(statCups, statPeriod, prefLanguage)}
                 </div>
@@ -2692,9 +2961,11 @@ const handleSaveDrink = () => {
                 </button>
             </motion.div>
             
-            <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShowPosterModal(false)} className="mt-8 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md text-white flex items-center justify-center font-bold text-xl pb-1 hover:bg-white/20 transition-colors border border-white/20">
+            <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShowPosterModal(false)} className="mt-8 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md text-white flex items-center justify-center font-bold text-xl pb-1 hover:bg-white/20 transition-colors border border-white/20 shrink-0">
                 <X size={22} strokeWidth={2.5} />
             </motion.button>
+            
+            </div> {/* 👈 核心：闭合安全包裹层 */}
           </motion.div>
         )}
       </AnimatePresence>
@@ -2721,7 +2992,7 @@ const handleSaveDrink = () => {
                       <h2 className="text-3xl font-black text-text-main tracking-tight mb-1">
                         {prefLanguage === 'English' ? 'Achievements' : '成就图鉴'}
                       </h2>
-                      <span className="text-sm font-bold text-[#8E7558]">
+                      <span className="text-sm font-bold theme-text">
                         已解锁: {unlockedCount} / {achievementsList.length}
                       </span>
                     </div>
@@ -2732,7 +3003,7 @@ const handleSaveDrink = () => {
 
                   <div className="flex-1 overflow-y-auto px-5 py-2 pb-10 custom-scrollbar relative">
                     <div className="w-full h-2 bg-bg-input rounded-full mb-6 overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${(unlockedCount / achievementsList.length) * 100}%` }} transition={{ duration: 1 }} className="h-full bg-gradient-to-r from-[#8E7558] to-[#D2B48C] rounded-full" />
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(unlockedCount / achievementsList.length) * 100}%` }} transition={{ duration: 1 }} className="h-full theme-gradient rounded-full" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -2751,11 +3022,11 @@ const handleSaveDrink = () => {
                           }}
                           className={`relative p-4 rounded-[24px] border-2 flex flex-col items-center text-center transition-all overflow-hidden ${
                             ach.isUnlocked 
-                              ? 'bg-bg-card border-[#8E7558]/30 shadow-[0_4px_15px_rgba(142,117,88,0.1)] cursor-pointer hover:scale-105 active:scale-95' 
+                              ? 'bg-bg-card theme-border/30 shadow-[0_4px_15px_rgba(142,117,88,0.1)] cursor-pointer hover:scale-105 active:scale-95' 
                               : 'bg-bg-input/30 border-transparent grayscale opacity-50 cursor-not-allowed'
                           }`}
                         >
-                          {ach.isUnlocked && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 bg-[#8E7558]/10 rounded-full blur-xl pointer-events-none"></div>}
+                          {ach.isUnlocked && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 theme-bg/10 rounded-full blur-xl pointer-events-none"></div>}
                           <div className="text-4xl mb-3 mt-2 relative z-10 drop-shadow-md">{ach.isUnlocked ? ach.icon : '🔒'}</div>
                           <div className={`font-black text-sm mb-1 z-10 ${ach.isUnlocked ? 'text-text-main' : 'text-text-muted'}`}>{ach.title}</div>
                           <div className="text-[10px] text-text-muted font-medium z-10">{ach.desc}</div>
@@ -2769,8 +3040,7 @@ const handleSaveDrink = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* 🌟 主机级成就解锁弹窗 (Xbox / PS Style 悬浮横幅) */}
+{/* 🌟 主机级成就解锁弹窗 (Xbox / PS Style 悬浮横幅 - 支持深浅色自适应) */}
       <AnimatePresence>
         {achievementBanner && (() => {
           const achvData = getAchievementsData(records).achievementsList.find(a => a.id === achievementBanner);
@@ -2788,34 +3058,40 @@ const handleSaveDrink = () => {
                 setSelectedAchv(achvData); // 点击横幅直接展示高光卡片！
               }}
             >
-              {/* 高级暗黑金属质感底板 */}
-              <div className="relative overflow-hidden rounded-[20px] bg-[#161618] border-[1px] border-[#D2B48C]/40 shadow-[0_30px_60px_rgba(0,0,0,0.6)] p-4 flex items-center gap-4">
+              {/* 👇 动态深浅色底板 */}
+              <div className={`relative overflow-hidden rounded-[20px] border p-4 flex items-center gap-4 shadow-2xl ${
+                isDark 
+                  ? 'bg-[#161618] border-[#D2B48C]/40 shadow-black/60' 
+                  : 'bg-white theme-border/20 shadow-[#8E7558]/15'
+              }`}>
                 
-                {/* 内部流光扫过特效 (纯 Framer Motion 实现，无需 CSS keyframes) */}
+                {/* 内部流光扫过特效 */}
                 <motion.div 
                   initial={{ x: '-150%' }}
                   animate={{ x: '200%' }}
                   transition={{ repeat: Infinity, duration: 2.5, ease: "linear", delay: 0.5 }}
-                  className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 pointer-events-none"
+                  className={`absolute inset-y-0 w-1/2 skew-x-12 pointer-events-none ${
+                    isDark ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent' : 'bg-gradient-to-r from-transparent via-white/40 to-transparent'
+                  }`}
                 />
 
                 {/* 背景金色光晕 */}
-                <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#D2B48C]/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className={`absolute -top-10 -left-10 w-32 h-32 rounded-full blur-3xl pointer-events-none ${isDark ? 'bg-[#D2B48C]/20' : 'theme-bg/10'}`}></div>
 
                 {/* 奖杯 Icon 容器 */}
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8E7558] to-[#D2B48C] flex items-center justify-center text-2xl shrink-0 shadow-inner z-10 border border-[#D2B48C]/50">
+                <div className="w-12 h-12 rounded-full theme-gradient flex items-center justify-center text-2xl shrink-0 shadow-inner z-10 border border-[#D2B48C]/50">
                   {achvData.icon}
                 </div>
 
                 {/* 文案区 */}
                 <div className="flex-1 min-w-0 relative z-10">
-                  <div className="text-[#D2B48C] text-[10px] font-black tracking-widest uppercase mb-0.5 drop-shadow-md">
+                  <div className={`text-[10px] font-black tracking-widest uppercase mb-0.5 drop-shadow-md ${isDark ? 'text-[#D2B48C]' : 'theme-text'}`}>
                     Achievement Unlocked
                   </div>
-                  <div className="text-white font-bold text-base truncate drop-shadow-md">
+                  <div className={`font-bold text-base truncate drop-shadow-md ${isDark ? 'text-white' : 'text-[#1a1a1e]'}`}>
                     {achvData.title}
                   </div>
-                  <div className="text-white/60 text-[11px] truncate mt-0.5 font-medium">
+                  <div className={`text-[11px] truncate mt-0.5 font-medium ${isDark ? 'text-white/60' : 'text-text-muted'}`}>
                     {achvData.desc}
                   </div>
                 </div>
@@ -2823,6 +3099,56 @@ const handleSaveDrink = () => {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+
+      {/* 👉 优雅的全局 Toast 提示 (已升级为主机横幅版！) */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div
+            initial={{ y: -100, opacity: 0, scale: 0.95 }}
+            animate={{ y: 24, opacity: 1, scale: 1 }}
+            exit={{ y: -100, opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", damping: 18, stiffness: 250 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[400] w-[92%] max-w-[360px] cursor-pointer"
+            onClick={() => setToastMsg(null)}>
+            {/* 👇 动态深浅色底板 */}
+              <div className={`relative overflow-hidden rounded-[20px] border p-4 flex items-center gap-4 shadow-2xl ${
+                isDark 
+                  ? 'bg-[#161618] theme-border-soft shadow-[0_30px_60px_rgba(0,0,0,0.6)]' 
+                  : 'bg-white theme-border-soft shadow-[0_20px_40px_rgba(0,0,0,0.08)]'
+              }`}>
+              {/* 背景光晕 (报错用红色光晕，其他全用 theme-bg-soft 自动跟随主题) */}
+              <div className={`absolute -top-10 -left-10 w-32 h-32 rounded-full blur-3xl pointer-events-none ${
+                toastMsg?.type === 'error' ? 'bg-red-500/15' : 'theme-bg-soft'
+              }`}></div>
+
+              {/* Icon 容器 (根据状态变更颜色) */}
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0 shadow-inner z-10 border ${
+                toastMsg.type === 'error' 
+                  ? 'bg-gradient-to-br from-red-400 to-red-600 border-red-300' 
+                  : 'theme-gradient border-[#D2B48C]/50'
+              }`}>
+                {toastMsg.type === 'error' ? '⚠️' : toastMsg.type === 'info' ? '💡' : '✨'}
+              </div>
+
+              {/* 文案区 (支持长文字换行) */}
+              <div className="flex-1 min-w-0 relative z-10">
+                <div className={`text-[10px] font-black tracking-widest uppercase mb-0.5 drop-shadow-md ${
+                  toastMsg.type === 'error' ? 'text-red-500' : isDark ? 'text-[#D2B48C]' : 'theme-text'
+                }`}>
+                  {toastMsg.type === 'error' ? (prefLanguage === 'English' ? 'System Error' : '错误提示') :
+                   toastMsg.type === 'info' ? (prefLanguage === 'English' ? 'Message' : '老糖人语录') :
+                   (prefLanguage === 'English' ? 'Success' : '操作成功')}
+                </div>
+                {/* 🌟 这里的 text-sm 去掉了 truncate，这样长篇的毒舌语录就能完整显示了！ */}
+                <div className={`font-bold text-[13px] leading-snug drop-shadow-md break-words ${isDark ? 'text-white' : 'text-[#1a1a1e]'}`}>
+                  {toastMsg.text}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
         {/* 🌟 隐藏款 SSR 高光成就展示卡片 (Centered Modal) */}
       <AnimatePresence>
@@ -2842,14 +3168,14 @@ const handleSaveDrink = () => {
               className="w-full max-w-[340px] bg-bg-card rounded-[32px] p-6 relative shadow-[0_30px_80px_rgba(0,0,0,0.4)] flex flex-col items-center text-center overflow-hidden border border-border-main/50"
             >
               {/* 顶部神圣光晕 */}
-              <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#D2B48C]/20 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 theme-bg-soft rounded-full blur-3xl pointer-events-none"></div>
 
               {/* 标题区 */}
               <div className="text-[64px] mb-2 relative z-10 drop-shadow-xl filter">{selectedAchv.icon}</div>
               <h2 className="text-3xl font-black text-text-main mb-2 tracking-tight relative z-10">{selectedAchv.title}</h2>
-              <div className="text-[11px] font-bold text-[#8E7558] mb-6 relative z-10 bg-[#8E7558]/10 px-3 py-1 rounded-full">
+              <div className="text-[11px] font-bold theme-text mb-6 relative z-10 theme-bg-soft px-3 py-1 rounded-full">
                 {selectedAchv.buildText(selectedAchv.trigger).date}
-              </div>
+                </div>
 
               {/* 核心相框：高光见证者 */}
               <div className="w-full bg-bg-input/60 rounded-[20px] p-3 flex items-center gap-4 mb-6 shadow-inner relative z-10 border border-border-main/50">
@@ -2868,7 +3194,7 @@ const handleSaveDrink = () => {
                        {selectedAchv.trigger.brand && (
                          <>
                            <span className="text-[10px] text-border-main/80">|</span>
-                           <span className="text-[10px] font-bold text-[#8E7558]">{selectedAchv.trigger.brand}</span>
+                           <span className="text-[10px] font-bold theme-text">{selectedAchv.trigger.brand}</span>
                          </>
                        )}
                     </div>
@@ -2879,7 +3205,7 @@ const handleSaveDrink = () => {
                     </div>
                     
                     {/* 3. 底部：规格标签 */}
-                    <div className="text-[10px] text-[#8E7558] font-medium bg-[#8E7558]/10 px-2 py-0.5 rounded-md">
+                    <div className="text-[10px] theme-text font-medium theme-bg/10 px-2 py-0.5 rounded-md">
                        {selectedAchv.trigger.size || '中杯'} · {selectedAchv.trigger.temperature || '正常冰'} · {selectedAchv.trigger.sweetness || '标准糖'}
                     </div>
                  </div>
@@ -2892,7 +3218,7 @@ const handleSaveDrink = () => {
 
               <button 
                 onClick={handleShareAchievement} // 👈 替换掉原来的演示代码
-                className="w-full bg-gradient-to-r from-[#8E7558] to-[#A58E72] text-white py-3.5 rounded-full font-bold shadow-[0_8px_20px_rgba(142,117,88,0.3)] active:scale-95 transition-all relative z-10 flex items-center justify-center gap-2"
+                className="w-full theme-gradient text-white py-3.5 rounded-full font-bold shadow-[0_8px_20px_rgba(142,117,88,0.3)] active:scale-95 transition-all relative z-10 flex items-center justify-center gap-2"
               >
                 <Share size={18} /> {/* 加上这个图标会让按钮更精致 */}
                 分享我的高光时刻
@@ -2936,7 +3262,7 @@ const handleSaveDrink = () => {
                    value={searchQuery}
                    onChange={(e) => setSearchQuery(e.target.value)}
                    placeholder={prefLanguage === 'English' ? "Search brand or name..." : "搜索品牌或饮品名称..."}
-                   className="w-full bg-bg-input rounded-2xl pl-12 pr-10 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#8E7558]/30 transition-all font-bold text-text-main placeholder:font-medium"
+                   className="w-full bg-bg-input rounded-2xl pl-12 pr-10 py-3.5 text-sm focus:outline-none focus:ring-2 focus:theme-ring/30 transition-all font-bold text-text-main placeholder:font-medium"
                  />
                  {searchQuery && (
                    <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main bg-bg-card rounded-full p-0.5 shadow-sm">
@@ -3011,7 +3337,7 @@ const handleSaveDrink = () => {
                               ></div>
 
                               {/* 卡片主体 */}
-                              <div className="bg-bg-card rounded-[24px] p-3.5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border-main/40 group-hover:border-[#8E7558]/50 group-hover:shadow-md transition-all">
+                              <div className="bg-bg-card rounded-[24px] p-3.5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border-main/40 group-hover:theme-border group-hover:shadow-md transition-all">
                                 
                                 {/* 左侧：日期与贴纸 */}
                                 <div className="flex flex-col items-center justify-center shrink-0 w-12">
@@ -3032,7 +3358,7 @@ const handleSaveDrink = () => {
                                 <div className="flex-1 min-w-0 py-1">
                                   <div className="flex justify-between items-start mb-1.5">
                                     <h3 className="font-black text-text-main text-[16px] leading-tight truncate pr-2">{record.type}</h3>
-                                    <span className="font-black text-[#8E7558] text-[16px] shrink-0">￥{record.cost}</span>
+                                    <span className="font-black theme-text text-[16px] shrink-0">￥{record.cost}</span>
                                   </div>
 
                                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
@@ -3070,66 +3396,62 @@ const handleSaveDrink = () => {
       <input
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         ref={fileInputRef}
         onChange={handleCapture}
       />
 
-      {/* 👉 优雅的全局 Toast 提示 */}
-      <AnimatePresence>
-        {toastMsg && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="fixed top-8 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-5 py-3 rounded-full shadow-2xl backdrop-blur-xl font-medium text-sm border"
-            style={{
-              backgroundColor: toastMsg.type === 'error' ? 'rgba(254, 226, 226, 0.95)' : isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-              color: toastMsg.type === 'error' ? '#991B1B' : isDark ? '#ffffff' : '#102a4a',
-              borderColor: toastMsg.type === 'error' ? 'rgba(239, 68, 68, 0.3)' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-            }}
-          >
-            {toastMsg.type === 'error' ? '⚠️' : toastMsg.type === 'info' ? '💡' : '✨'}
-            {toastMsg.text}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bg-card/80 backdrop-blur-xl border border-border-main/80 rounded-full px-2 py-2 flex items-center gap-2 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
         <button
           onClick={() => setActiveTab('home')}
-          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'home' ? 'bg-bg-input text-[#8E7558] shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
+          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'home' ? 'bg-bg-input theme-text shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
         >
           <Coffee size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
         </button>
         <button
           onClick={() => setActiveTab('stats')}
-          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'stats' ? 'bg-bg-input text-[#8E7558] shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
+          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'stats' ? 'bg-bg-input theme-text shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
         >
           <BarChart3 size={24} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'settings' ? 'bg-bg-input text-[#8E7558] shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
+          className={`flex items-center justify-center w-20 h-12 rounded-full transition-all duration-300 ${activeTab === 'settings' ? 'bg-bg-input theme-text shadow-sm' : 'text-text-muted hover:text-text-main hover:bg-bg-input/50'}`}
         >
           <SettingsIcon size={24} strokeWidth={activeTab === 'settings' ? 2.5 : 2} />
         </button>
       </div>
 
    {/* 👇 将这里的样式替换为“彻底隐藏滚动条”的终极兼容代码 */}
+     {/* 🌟 动态主题全局引擎：实时捕获 themeAccent，并计算衍生的渐变与阴影 */}
       <style dangerouslySetInnerHTML={{__html: `
-        /* 隐藏 Chrome, Safari 和 Opera 的滚动条 */
-        .custom-scrollbar::-webkit-scrollbar { 
-          display: none; 
-          width: 0px; 
+        :root {
+          /* 核心主题色变量 */
+          --theme-color: ${themeAccent};
         }
-        /* 隐藏 IE, Edge 和 Firefox 的滚动条 */
-        .custom-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
-        }
+        
+        /* 1. 基础主题类 */
+        .theme-bg { background-color: var(--theme-color) !important; color: #ffffff !important; }
+        .hover\\:theme-bg:hover { background-color: var(--theme-color) !important; color: #ffffff !important; }
+        .theme-text { color: var(--theme-color) !important; }
+        .theme-border { border-color: var(--theme-color) !important; }
+        .theme-ring { --tw-ring-color: var(--theme-color) !important; box-shadow: 0 0 0 2px var(--tw-ring-color) !important; }
+        
+        /* 2. 柔和/透明主题类 (借助 CSS color-mix 动态计算透明度) */
+        .theme-bg-soft { background-color: color-mix(in srgb, var(--theme-color) 15%, transparent) !important; color: var(--theme-color) !important; }
+        .theme-border-soft { border-color: color-mix(in srgb, var(--theme-color) 30%, transparent) !important; }
+        .group:hover .group-hover\\:theme-border { border-color: var(--theme-color) !important; }
+        
+        /* 3. 动态渐变与发光阴影体系 */
+        .theme-gradient { background: linear-gradient(135deg, var(--theme-color), color-mix(in srgb, var(--theme-color) 75%, white)) !important; }
+        .theme-gradient-v { background: linear-gradient(to bottom, color-mix(in srgb, var(--theme-color) 75%, white), var(--theme-color)) !important; }
+        .theme-shadow { box-shadow: 0 8px 20px color-mix(in srgb, var(--theme-color) 30%, transparent) !important; }
+
+        /* 隐藏浏览器原生滚动条 */
+        .custom-scrollbar::-webkit-scrollbar { display: none; width: 0px; }
+        .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
     </div>
   );
