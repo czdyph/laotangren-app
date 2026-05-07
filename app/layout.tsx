@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-// 1. 设置 Viewport 和主题色 (PWA 的顶部沉浸式状态栏靠这个)
+// 1. 设置 Viewport (去除 themeColor，避免和 Capacitor 原生插件打架)
 export const viewport: Viewport = {
-  themeColor: "#8E7558",
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // 阻止双击放大，让体验更像 App
+  maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
 };
 
 // 2. 注入 PWA 的 Manifest 和苹果特有的全屏 Meta 标签
