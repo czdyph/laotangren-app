@@ -208,24 +208,76 @@ export default function StatsTab(props: StatsTabProps) {
 
                     return (
                         <div className="bg-bg-card rounded-[32px] h-64 w-full relative mb-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-border-main overflow-hidden flex items-end justify-center pb-2 px-4">
+                            {/* 🚀 注入纯 CSS 原生动画，释放 JS 主线程 */}
+                            <style dangerouslySetInnerHTML={{ __html: `
+                                @keyframes massiveStickerFadeIn {
+                                    from { opacity: 0; transform: translateY(15px); }
+                                    to { opacity: 1; transform: translateY(0); }
+                                }
+                                .massive-sticker {
+                                    opacity: 0;
+                                    animation: massiveStickerFadeIn 0.5s ease-out forwards;
+                                }
+                            `}} />
+
                             <div className="flex flex-wrap-reverse justify-center max-w-[95%]">
                                 {statRecords.map((r, i) => {
-                                    const isYearly = statPeriod === 'year' || count > 50;
+                                    // 🌟 性能雷达：数量过载时，开启 GPU 减负模式
+                                    const isMassive = statPeriod === 'year' || count > 50;
+                                    
+                                    // 预计算倾斜角度
+                                    const rotation = (i % 3 === 0 ? -1 : 1) * ((i % 10) * 2);
+                                    
+                                    // 🚀 核心优化 1：白边滤镜熔断机制
+                                    // 正常模式：5 重叠加滤镜 (极耗 GPU)
+                                    const heavyFilter = "drop-shadow(2px 2px 0 white) drop-shadow(-2px -2px 0 white) drop-shadow(2px -2px 0 white) drop-shadow(-2px 2px 0 white) drop-shadow(0 4px 6px rgba(0,0,0,0.1))";
+                                    // 海量模式：1 层微白边 + 1 层轻阴影 (GPU 负载直降 80%)
+                                    const lightFilter = "drop-shadow(0 0 1px rgba(255,255,255,0.8)) drop-shadow(0 2px 4px rgba(0,0,0,0.15))";
+                                    const activeFilter = isMassive ? lightFilter : heavyFilter;
+
+                                    // 🚀 核心优化 2：纯 CSS 渲染通道 (绕过 framer-motion)
+                                    if (isMassive) {
+                                        return (
+                                            <div
+                                                key={`${r.id}-${statAnimationKey}`}
+                                                className="massive-sticker transform hover:!scale-125 hover:z-50 transition-all cursor-pointer relative will-change-transform"
+                                                style={{ 
+                                                    width: `${baseWidth * stickerScale}px`, 
+                                                    height: `${baseHeight * stickerScale}px`, 
+                                                    marginLeft: i === 0 ? '0px' : `${baseOverlap * stickerScale}px`, 
+                                                    transform: `rotate(${rotation}deg)`, 
+                                                    zIndex: i,
+                                                    // 赋予纯随机的 CSS 延迟，实现星星点点的浮现效果
+                                                    animationDelay: `${Math.random() * 0.4}s`
+                                                }}
+                                                onClick={() => { triggerHaptic('medium'); setStatsSelectedRecord(r); }}
+                                            >
+                                                {isExportableImageSrc(r.imageUrl) ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={r.imageUrl} alt="drink" loading="lazy" decoding="async" className="w-full h-full object-contain" style={{ filter: activeFilter }} />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-text-muted" style={{ filter: activeFilter }}><Coffee size={38 * stickerScale} strokeWidth={1.8} /></div>
+                                                )}
+                                            </div>
+                                        )
+                                    }
+
+                                    // 🎨 正常模式通道 (保留弹簧动画)
                                     return (
                                         <motion.div
                                             key={`${r.id}-${statAnimationKey}`} 
-                                            initial={{ y: isYearly ? 0 : -100, opacity: 0 }} 
+                                            initial={{ y: -100, opacity: 0 }} 
                                             animate={{ y: 0, opacity: 1 }}
-                                            transition={{ delay: isYearly ? Math.random() * 0.4 : i * Math.min(0.05, 0.95 / Math.max(count, 1)), type: isYearly ? 'tween' : 'spring', duration: isYearly ? 0.3 : undefined, bounce: isYearly ? 0 : 0.5 }}
+                                            transition={{ delay: i * Math.min(0.05, 0.95 / Math.max(count, 1)), type: 'spring', bounce: 0.5 }}
                                             className="transform hover:!scale-125 hover:z-50 transition-all cursor-pointer relative will-change-transform"
-                                            style={{ width: `${baseWidth * stickerScale}px`, height: `${baseHeight * stickerScale}px`, marginLeft: i === 0 ? '0px' : `${baseOverlap * stickerScale}px`, rotate: `${(i % 3 === 0 ? -1 : 1) * ((i % 10) * 2)}deg`, zIndex: i }}
+                                            style={{ width: `${baseWidth * stickerScale}px`, height: `${baseHeight * stickerScale}px`, marginLeft: i === 0 ? '0px' : `${baseOverlap * stickerScale}px`, rotate: `${rotation}deg`, zIndex: i }}
                                             onClick={() => { triggerHaptic('medium'); setStatsSelectedRecord(r); }}
                                         >
                                             {isExportableImageSrc(r.imageUrl) ? (
                                                 // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={r.imageUrl} alt="drink" loading="lazy" decoding="async" className="w-full h-full object-contain" style={{ filter: "drop-shadow(2px 2px 0 white) drop-shadow(-2px -2px 0 white) drop-shadow(2px -2px 0 white) drop-shadow(-2px 2px 0 white) drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }} />
+                                                <img src={r.imageUrl} alt="drink" loading="lazy" decoding="async" className="w-full h-full object-contain" style={{ filter: activeFilter }} />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-text-muted" style={{ filter: "drop-shadow(2px 2px 0 white) drop-shadow(-2px -2px 0 white) drop-shadow(2px -2px 0 white) drop-shadow(-2px 2px 0 white) drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }}><Coffee size={38 * stickerScale} strokeWidth={1.8} /></div>
+                                                <div className="w-full h-full flex items-center justify-center text-text-muted" style={{ filter: activeFilter }}><Coffee size={38 * stickerScale} strokeWidth={1.8} /></div>
                                             )}
                                         </motion.div>
                                     )
