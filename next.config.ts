@@ -9,16 +9,19 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
+    // 👇 新增：静态导出不支持 Next.js 默认的图片优化服务器，需开启 unoptimized
+    unoptimized: true, 
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'picsum.photos',
         port: '',
-        pathname: '/**', // This allows any path under the hostname
+        pathname: '/**', 
       },
     ],
   },
-  output: 'standalone',
+  // 👇 核心修改：将 'standalone' 改为 'export'
+  output: 'export', 
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
