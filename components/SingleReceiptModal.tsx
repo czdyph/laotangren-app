@@ -23,27 +23,21 @@ export default function SingleReceiptModal({
 }: SingleReceiptModalProps) {
     if (!shareRecord) return null;
 
-    return (
+return (
         <AnimatePresence>
+            {/* 🚀 外层：黑色蒙层，绝对静止，只负责透明度渐变 */}
             <motion.div
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                // 开启 x 轴拖拽
-                drag="x"
-                // 锁定方向：只允许向右拉 (right 阻力延展到 0.8)，禁止向左拉
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={{ left: 0, right: 0.8 }}
-                // 释放判定：向右滑过 100 像素，或者滑动加速度足够快，就关掉弹窗
-                onDragEnd={(e, info) => {
-                    if (info.offset.x > 100 || info.velocity.x > 500) {
-                        setShareRecord(null);
-                    }
-                }}
-                className="fixed inset-0 z-[100] bg-[#1a1a1e]/95 overflow-y-auto custom-scrollbar backdrop-blur-md"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[999] bg-[#1a1a1e]/95 overflow-y-auto custom-scrollbar backdrop-blur-md"
             >
-                <div className="min-h-full flex flex-col items-center justify-center py-12 px-4 w-full">
+                {/* 🚀 内层：内容容器，接管手势拖拽和向右飞出 */}
+                <motion.div 
+                    initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: "100%" }} 
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={{ left: 0, right: 0.8 }}
+                    onDragEnd={(e, info) => { if (info.offset.x > 100 || info.velocity.x > 500) setShareRecord(null); }}
+                    className="min-h-full flex flex-col items-center justify-center py-12 px-4 w-full"
+                >
                     <motion.div
                         initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
                         ref={singleReceiptRef}
@@ -148,7 +142,7 @@ export default function SingleReceiptModal({
                     <motion.button initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setShareRecord(null)} className="mt-8 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-xl pb-1 shadow-lg hover:bg-gray-100 transition-colors shrink-0">
                         <X size={22} strokeWidth={2.5} />
                     </motion.button>
-                </div>
+                </motion.div>
             </motion.div>
         </AnimatePresence>
     );

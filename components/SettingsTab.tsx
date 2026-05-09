@@ -196,12 +196,12 @@ export default function SettingsTab(props: SettingsTabProps) {
                     {/* 外观模式 */}
                     <div className="p-3">
                         <label className="text-xs font-bold text-text-main mb-2 block px-1">外观模式</label>
-                        <div className="grid grid-cols-4 gap-1.5">
+                        {/* 🚀 核心修改：将 grid-cols-4 改为 grid-cols-3，让 3 个按钮完美平铺 */}
+                        <div className="grid grid-cols-3 gap-1.5">
                             {[
                                 { key: 'light', label: '浅色', icon: '☀️' },
                                 { key: 'dark', label: '深色', icon: '🌙' },
-                                { key: 'auto_system', label: '系统', icon: '📱' },
-                                { key: 'auto_sun', label: '日落', icon: '🌄' }
+                                { key: 'auto_system', label: '系统', icon: '📱' }
                             ].map(item => (
                                 <button
                                     key={item.key}
@@ -329,7 +329,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                         <button onClick={handleExportData} className="py-2.5 rounded-xl bg-bg-input text-text-main font-black text-[11px] hover:theme-bg hover:text-white transition-all active:scale-95">导出备份</button>
                         <button onClick={() => { }} className="py-2.5 rounded-xl bg-bg-input text-text-main font-black text-[11px] relative overflow-hidden active:scale-95 transition-all">
                             恢复数据
-                            <input type="file" accept=".json" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImportData} />
+                            <input type="file" accept=".zip" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImportData} />
                         </button>
                     </div>
                     <button onClick={handleCompressHistory} className="w-full py-3 text-center text-[10px] font-black text-text-muted/60 border-t border-border-main/20 hover:text-text-main transition-colors">
