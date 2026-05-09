@@ -3,8 +3,8 @@ import { Share as CapShare } from '@capacitor/share';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import * as htmlToImage from 'html-to-image';
 import { DrinkRecord } from '@/types';
-import { compressBase64Image } from '@/utils/helpers';
 import { saveImageToDisk } from '@/utils/fileManager';
+import JSZip from 'jszip';
 
 interface ExportActionsProps {
     records: DrinkRecord[];
@@ -109,70 +109,145 @@ export function useExportActions({
         } catch (error) { showToast('海报生成失败', 'error'); }
     };
 
-    // 4. 导出 JSON 数据
+    // 4. 终极打包导出 (JSON + 物理沙盒实拍图片)
     const handleExportData = async () => {
-        triggerHaptic('medium');
-        const dataStr = JSON.stringify(records);
-        const fileName = `SugarUltra_Backup_${new Date().toLocaleDateString().split('/').join('-')}.json`;
-        if (Capacitor.isNativePlatform()) {
-            try {
-                await Filesystem.writeFile({ path: `Sugar Ultra/${fileName}`, data: dataStr, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
-                showToast('✨ 备份已成功保存到手机【文档/Sugar Ultra】！', 'success');
-            } catch (error: any) { showToast(`导出失败: ${error.message}`, 'error'); }
-        } else {
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-            showToast('✨ 备份数据导出成功！', 'success');
+        try {
+            triggerHaptic('medium');
+            showToast('正在打包数据与图片，请稍候...', 'info');
+            const zip = new JSZip();
+            
+            // 1. 写入核心 JSON 数据
+            zip.file("data.json", JSON.stringify(records, null, 2));
+            
+            // 2. 提取物理照片存入 images 文件夹
+            const imgFolder = zip.folder("images");
+            for (const record of records) {
+                if (record.imageUrl && !record.imageUrl.startsWith('data:') && !record.imageUrl.startsWith('/logos/') && record.imageUrl !== '??') {
+                    const fileName = record.imageUrl.split('/').pop() || `boba_${record.id}.jpg`;
+                    if (fileName && imgFolder) {
+                        try {
+                            // 从底层沙盒读取物理文件
+                            const fileData = await Filesystem.readFile({
+                                path: fileName,
+                                directory: Directory.Data 
+                            });
+                            imgFolder.file(fileName, fileData.data, { base64: true });
+                        } catch (e) {
+                            console.warn(`[备份跳过] 找不到源文件或读取失败: ${fileName}`);
+                        }
+                    }
+                }
+            }
+
+            // 3. 生成 Zip 文件 Blob / Base64
+            const fileName = `SugarUltra_Backup_${new Date().toLocaleDateString().split('/').join('-')}.zip`;
+
+            if (Capacitor.isNativePlatform()) {
+                const zipBase64 = await zip.generateAsync({ type: "base64" });
+                
+                // 唤起系统分享面板（因为直接存 Documents 很多用户找不到，分享面板支持发给微信/隔空投送/存入文件）
+                const result = await Filesystem.writeFile({
+                    path: fileName,
+                    data: zipBase64,
+                    directory: Directory.Cache
+                });
+
+                await CapShare.share({
+                    title: 'Sugar Ultra 完整备份',
+                    text: '这是包含所有打卡记录与照片的完整备份包 (.zip)',
+                    url: result.uri,
+                });
+                showToast('✨ 备份包导出成功！', 'success');
+            } else {
+                const blob = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                showToast('✨ 备份打包下载成功！', 'success');
+            }
+        } catch (error: any) {
+            console.error('Export failed:', error);
+            if (error.message !== 'Share canceled') {
+                showToast(`打包导出失败: ${error.message}`, 'error');
+            }
         }
     };
 
-    // 5. 导入 JSON 数据
-    const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 5. 终极解压恢复 (解析 JSON 并将图片重新植入新手机硬盘)
+    const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
+
+        if (window.confirm('⚠️ 警告：这会覆盖当前所有的记录！\n\n确认导入吗？')) {
             try {
-                const imported = JSON.parse(event.target?.result as string);
-                if (Array.isArray(imported)) {
-                    if (window.confirm('⚠️ 警告：这会覆盖当前所有的记录！\n\n确认导入吗？')) {
-                        setRecords(imported);
-                        triggerHaptic('heavy');
-                        showToast('✨ 数据恢复成功！', 'success');
+                showToast('正在解压并恢复数据...', 'info');
+                triggerHaptic('medium');
+
+                const zip = new JSZip();
+                const loadedZip = await zip.loadAsync(file);
+
+                const jsonFile = loadedZip.file("data.json");
+                if (!jsonFile) throw new Error("压缩包内找不到 data.json");
+                
+                const jsonStr = await jsonFile.async("string");
+                const importedRecords = JSON.parse(jsonStr) as DrinkRecord[];
+
+                for (const record of importedRecords) {
+                    if (record.imageUrl && !record.imageUrl.startsWith('data:') && !record.imageUrl.startsWith('/logos/') && record.imageUrl !== '??') {
+                        const fileName = record.imageUrl.split('/').pop() || `boba_${record.id}.jpg`;
+                        const imgFile = loadedZip.file(`images/${fileName}`);
+                        
+                        if (imgFile) {
+                            try {
+                                const base64Data = await imgFile.async("base64");
+                                const newDataUrl = `data:image/jpeg;base64,${base64Data}`;
+                                record.imageUrl = await saveImageToDisk(newDataUrl, fileName);
+                            } catch (imgErr) {
+                                console.warn(`图片 ${fileName} 恢复失败，降级为空白图`, imgErr);
+                                record.imageUrl = ''; 
+                            }
+                        } else {
+                            record.imageUrl = '';
+                        }
                     }
-                } else throw new Error("Invalid format");
-            } catch (err) { showToast('文件格式错误，无法读取', 'error'); }
-            if (e.target) e.target.value = '';
-        };
-        reader.readAsText(file);
+                }
+
+                setRecords(importedRecords);
+                triggerHaptic('heavy');
+                showToast('✨ 数据与图片恢复成功！', 'success');
+            } catch (err: any) {
+                console.error('Import failed:', err);
+                showToast(`恢复失败: ${err.message}`, 'error');
+            }
+        }
+        if (e.target) e.target.value = ''; 
     };
 
-    // 6. 史诗级架构升级：将内存中的所有 Base64 历史图片迁移至物理磁盘
+    // 6. 架构升级：压缩历史数据
     const handleCompressHistory = async () => {
         triggerHaptic('medium');
         showToast('正在执行底层数据大迁徙，请勿退出 App...', 'info');
         let migratedCount = 0;
 
         const updatedRecords = await Promise.all(records.map(async (record) => {
-            // 只要发现带有 data:image 前缀的“内存炸弹”，立刻存盘
             if (record.imageUrl && record.imageUrl.startsWith('data:image/')) {
                 try {
                     const filename = `boba_migrated_${record.id}.jpg`;
                     const diskUri = await saveImageToDisk(record.imageUrl, filename);
                     migratedCount++;
-                    return { ...record, imageUrl: diskUri }; // 替换为极短的物理路径
-                } catch (e) { return record; }
+                    return { ...record, imageUrl: diskUri };
+                } catch (e) { 
+                    return record; 
+                }
             }
             return record;
         }));
 
         if (migratedCount > 0) {
             setRecords(updatedRecords);
-            showToast(`✨ 架构升级完成！成功将 ${migratedCount} 张历史照片移至底层磁盘，内存已大幅释放！`, 'success');
+            showToast(`✨ 架构升级完成！成功迁移 ${migratedCount} 张历史照片，内存大幅释放！`, 'success');
             triggerHaptic('heavy');
         } else {
-            showToast('所有照片已是最高效的物理存储状态，无需优化！', 'success');
+            showToast('所有照片已是最高效的物理存储状态！', 'success');
         }
     };
 
