@@ -138,7 +138,7 @@ export default function App() {
   }, [fontScale, isLoaded]);
 
 
-// 🌟 升级版 Toast 引擎：防冲突、防误杀
+  // 🌟 升级版 Toast 引擎：防冲突、防误杀
   const showToast = (text: string, type: string = 'success') => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMsg({ text, type: type as 'success' | 'error' | 'info' });
@@ -156,11 +156,37 @@ export default function App() {
     else if (style === 'success') navigator.vibrate([100, 60, 200]);
   };
 
+  // 🌟 初始化导出引擎，并注入 100% 灵魂克隆能力
   const {
     handleSaveReceipt, handleShareReceipt, handleShareAchievement,
     handleExportData, handleImportData, handleCompressHistory
   } = useExportActions({
-    records, setRecords, prefLanguage, isDark, selectedAchv, showToast, triggerHaptic
+    records, setRecords, prefLanguage, isDark, selectedAchv, showToast, triggerHaptic,
+
+    // 👇 1. 把当前所有的偏好设置打包，准备塞进 Zip 里
+    userSettings: {
+      themeMode, prefLanguage, defaultTemp, defaultSweet,
+      themeAccent, fontScale, cardDensity, weekStart,
+      weeklyBudget, weeklyCupLimit, monthlyBudget, monthlyCupLimit,
+      calendarImageMode
+    },
+
+    // 👇 2. 告诉解压引擎，拿到备份的老设置后该怎么一条条还原系统
+    restoreSettings: (importedSettings) => {
+      if (importedSettings.themeMode !== undefined) setThemeMode(importedSettings.themeMode);
+      if (importedSettings.prefLanguage !== undefined) setPrefLanguage(importedSettings.prefLanguage);
+      if (importedSettings.defaultTemp !== undefined) setDefaultTemp(importedSettings.defaultTemp);
+      if (importedSettings.defaultSweet !== undefined) setDefaultSweet(importedSettings.defaultSweet);
+      if (importedSettings.themeAccent !== undefined) setThemeAccent(importedSettings.themeAccent);
+      if (importedSettings.fontScale !== undefined) setFontScale(importedSettings.fontScale);
+      if (importedSettings.cardDensity !== undefined) setCardDensity(importedSettings.cardDensity);
+      if (importedSettings.weekStart !== undefined) setWeekStart(importedSettings.weekStart);
+      if (importedSettings.weeklyBudget !== undefined) setWeeklyBudget(importedSettings.weeklyBudget);
+      if (importedSettings.weeklyCupLimit !== undefined) setWeeklyCupLimit(importedSettings.weeklyCupLimit);
+      if (importedSettings.monthlyBudget !== undefined) setMonthlyBudget(importedSettings.monthlyBudget);
+      if (importedSettings.monthlyCupLimit !== undefined) setMonthlyCupLimit(importedSettings.monthlyCupLimit);
+      if (importedSettings.calendarImageMode !== undefined) setCalendarImageMode(importedSettings.calendarImageMode);
+    }
   });
 
   const openAddModal = () => {
@@ -221,7 +247,7 @@ export default function App() {
     setShareRecord(record);
   };
 
-// 🌟 智能成就进度计算引擎 (修复了空品牌连击与负数 Bug)
+  // 🌟 智能成就进度计算引擎 (修复了空品牌连击与负数 Bug)
   const getLockedMessage = (ach: any, records: DrinkRecord[], prefLang: string) => {
     const totalCups = records.length;
     const title = ach.title || '';
@@ -234,28 +260,28 @@ export default function App() {
     }
     if (title.includes('死忠') || title.includes('Loyal')) {
       let maxStreak = 0; let currentStreak = 0; let currentBrand = '';
-      
+
       // 🚀 修复 1：必须先按真实的年月日排序，才能准确计算“连续”
       const sortedRecords = [...records].sort((a, b) => {
-          if (a.year !== b.year) return a.year - b.year;
-          if (a.month !== b.month) return a.month - b.month;
-          if (a.day !== b.day) return a.day - b.day;
-          return Number(a.id) - Number(b.id);
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.month !== b.month) return a.month - b.month;
+        if (a.day !== b.day) return a.day - b.day;
+        return Number(a.id) - Number(b.id);
       });
 
       sortedRecords.forEach(r => {
         // 🚀 修复 2：只有当 brand 存在且不是空字符串时，才参与连击计算
-        if (r.brand && r.brand === currentBrand) { 
-            currentStreak++; 
-            maxStreak = Math.max(maxStreak, currentStreak); 
-        } else if (r.brand) { 
-            currentBrand = r.brand; 
-            currentStreak = 1; 
-            maxStreak = Math.max(maxStreak, currentStreak); 
+        if (r.brand && r.brand === currentBrand) {
+          currentStreak++;
+          maxStreak = Math.max(maxStreak, currentStreak);
+        } else if (r.brand) {
+          currentBrand = r.brand;
+          currentStreak = 1;
+          maxStreak = Math.max(maxStreak, currentStreak);
         } else {
-            // 遇到没写品牌的，直接中断连击
-            currentBrand = '';
-            currentStreak = 0;
+          // 遇到没写品牌的，直接中断连击
+          currentBrand = '';
+          currentStreak = 0;
         }
       });
       const diff = getDiff(7, maxStreak);
